@@ -1,0 +1,15 @@
+services:
+  store:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      STORE_PORT: "8000"
+      STORE_DATA: /data/ocstore
+      STORE_TITLE: OC Theme Studio 主题商店
+    volumes:
+      - ocstore-data:/data
+    restart: unless-stopped
+
+volumes:
+  ocstore-data:

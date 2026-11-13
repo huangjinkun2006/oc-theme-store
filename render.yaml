@@ -1,0 +1,22 @@
+# Render 一键部署：把本仓库连到 Render 后会自动识别此文件。
+# 免费版无持久磁盘，重启会清空上传内容；生产请改用带 disk 的付费方案（下方示例）。
+services:
+  - type: web
+    name: oc-theme-store
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn store_server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: STORE_DATA
+        value: /var/data/ocstore
+      - key: STORE_TITLE
+        value: OC Theme Studio 主题商店
+      - key: PYTHON_VERSION
+        value: "3.12"
+    healthCheckPath: /api/health
+    # 持久磁盘（付费实例）：取消注释后上传的主题会永久保留
+    # disk:
+    #   name: ocstore-data
+    #   mountPath: /var/data
+    #   sizeGB: 1

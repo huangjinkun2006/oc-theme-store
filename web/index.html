@@ -1,0 +1,193 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>OC Theme Studio · 主题商店</title>
+<style>
+  :root{
+    --bg:#f5f6f8; --card:#fff; --line:#e3e6ec; --text:#1c2330;
+    --muted:#6b7482; --accent:#2f6bff; --accent-soft:#eaf0ff;
+    --ok:#1a9c62; --err:#d64545; --shadow:0 1px 3px rgba(20,30,55,.07),0 8px 24px rgba(20,30,55,.05);
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);
+    font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
+  a{color:var(--accent);text-decoration:none}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 22px 60px}
+  header{background:linear-gradient(135deg,#1b2740,#2f6bff);color:#fff;padding:34px 0 30px;margin-bottom:26px}
+  header .wrap{padding-bottom:0}
+  h1{margin:0 0 6px;font-size:24px;letter-spacing:.3px}
+  .sub{opacity:.82;font-size:13px}
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:20px;
+    background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.2);
+    border-radius:10px;padding:10px 12px}
+  .bar code{flex:1;min-width:220px;font-size:12.5px;word-break:break-all;color:#fff}
+  .bar button{background:#fff;color:#20459c;border:0;border-radius:7px;padding:7px 14px;
+    font-weight:600;cursor:pointer;font-size:12.5px}
+  .bar button:hover{background:#eaf0ff}
+  .cols{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:22px}
+  @media(max-width:860px){.cols{grid-template-columns:1fr}}
+  h2{font-size:15px;margin:0 0 14px;display:flex;align-items:center;gap:8px}
+  h2 .count{font-size:11px;font-weight:600;background:var(--accent-soft);color:var(--accent);
+    border-radius:20px;padding:2px 9px}
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:16px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;
+    box-shadow:var(--shadow);display:flex;flex-direction:column}
+  .thumb{aspect-ratio:16/9;background:#10151f;display:flex;align-items:center;justify-content:center;
+    overflow:hidden;color:#5a6577;font-size:12px}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .body{padding:13px 14px 14px;display:flex;flex-direction:column;gap:7px;flex:1}
+  .name{font-weight:650;font-size:14px;line-height:1.35}
+  .meta{font-size:11.5px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap}
+  .desc{font-size:12px;color:#4a5464;flex:1;
+    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .tags{display:flex;gap:5px;flex-wrap:wrap}
+  .tag{font-size:10.5px;background:#f0f3f9;color:#55617a;border-radius:5px;padding:2px 7px}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}
+  .dl{background:var(--accent);color:#fff;border:0;border-radius:7px;padding:7px 13px;
+    font-size:12.5px;font-weight:600;cursor:pointer}
+  .dl:hover{filter:brightness(1.08)}
+  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;
+    padding:20px;box-shadow:var(--shadow);position:sticky;top:18px}
+  label{display:block;font-size:12px;font-weight:600;margin:13px 0 5px;color:#3a4454}
+  label:first-of-type{margin-top:0}
+  input[type=text],textarea{width:100%;border:1px solid var(--line);border-radius:8px;
+    padding:9px 11px;font:inherit;font-size:13px;background:#fbfcfe;color:var(--text)}
+  input[type=text]:focus,textarea:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+  textarea{resize:vertical;min-height:70px}
+  .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+  .file{border:1px dashed #c8d2e4;border-radius:8px;padding:11px;font-size:12px;
+    color:var(--muted);background:#fbfcfe;margin-top:5px}
+  .file input{display:block;width:100%;font-size:11.5px;margin-top:6px}
+  .submit{width:100%;margin-top:18px;background:var(--accent);color:#fff;border:0;
+    border-radius:8px;padding:11px;font-size:13.5px;font-weight:650;cursor:pointer}
+  .submit:hover{filter:brightness(1.08)}
+  .submit:disabled{opacity:.55;cursor:default}
+  .msg{margin-top:12px;font-size:12px;min-height:18px}
+  .msg.ok{color:var(--ok)} .msg.err{color:var(--err)}
+  .empty{background:var(--card);border:1px dashed var(--line);border-radius:12px;
+    padding:40px;text-align:center;color:var(--muted)}
+  .foot{margin-top:26px;font-size:11.5px;color:var(--muted);text-align:center;line-height:1.9}
+  .pill{display:inline-block;background:#fff2d8;color:#9a6a00;border-radius:6px;
+    padding:2px 8px;font-size:11px;margin-bottom:12px}
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>OC Theme Studio · 主题商店</h1>
+    <div class="sub">浏览、下载并上传 OpenCore 引导主题 — 任何平台都能通过浏览器参与</div>
+    <div class="bar">
+      <span style="font-size:12px;opacity:.85">App 服务器地址</span>
+      <code id="base"></code>
+      <button onclick="copyBase(this)">复制地址</button>
+    </div>
+  </div>
+</header>
+
+<div class="wrap">
+  <div class="cols">
+    <section>
+      <h2>全部主题 <span class="count" id="count">0</span></h2>
+      <div class="grid" id="grid"></div>
+      <div class="empty" id="empty" style="display:none">商店还没有主题，右侧上传第一个吧。</div>
+    </section>
+
+    <aside>
+      <div class="panel">
+        <h2>上传主题</h2>
+        <div class="pill">上传后所有用户都能下载并应用</div>
+        <form id="form">
+          <label>主题名称 *</label>
+          <input type="text" name="name" required placeholder="例如：Acidanthera GoldenGate">
+          <div class="two">
+            <div><label>作者</label><input type="text" name="author" placeholder="匿名"></div>
+            <div><label>版本</label><input type="text" name="version" value="1.0"></div>
+          </div>
+          <label>标签（逗号分隔）</label>
+          <input type="text" name="tags" placeholder="简约, 深色, macOS">
+          <label>简介</label>
+          <textarea name="description" placeholder="主题特点、适用分辨率、说明…"></textarea>
+          <label>主题压缩包 * (.zip)</label>
+          <div class="file">包含 Background 图与 icns 图标的主题包
+            <input type="file" name="package" accept=".zip" required>
+          </div>
+          <label>预览图（可选，可多选）</label>
+          <div class="file">PNG / JPG，第一张作为封面
+            <input type="file" name="previews" accept="image/*" multiple>
+          </div>
+          <button class="submit" type="submit" id="submit">发布主题</button>
+          <div class="msg" id="msg"></div>
+        </form>
+      </div>
+    </aside>
+  </div>
+
+  <div class="foot">
+    在 macOS 版 <b>OC Theme Studio</b> 的「主题商店」窗口地址栏填入上方地址，即可下载并一键应用主题。<br>
+    后端为纯文件存储、无数据库；部分免费托管重启会清空上传内容，生产环境请挂载持久磁盘。
+  </div>
+</div>
+
+<script>
+const base = location.origin;
+document.getElementById('base').textContent = base;
+function copyBase(btn){
+  navigator.clipboard.writeText(base).then(()=>{
+    btn.textContent='已复制'; setTimeout(()=>btn.textContent='复制地址',1400);
+  }).catch(()=>{
+    const ta=document.createElement('textarea'); ta.value=base;
+    document.body.appendChild(ta); ta.select(); document.execCommand('copy'); ta.remove();
+    btn.textContent='已复制'; setTimeout(()=>btn.textContent='复制地址',1400);
+  });
+}
+function esc(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function thumb(t){
+  return t.thumbnail ? `<img src="${esc(t.thumbnail)}" alt="" loading="lazy"
+      onerror="this.parentNode.textContent='无预览图'">` : '无预览图';
+}
+function card(t){
+  const tags=(t.tags||[]).slice(0,4).map(x=>`<span class="tag">${esc(x)}</span>`).join('');
+  return `<div class="card">
+    <div class="thumb">${thumb(t)}</div>
+    <div class="body">
+      <div class="name">${esc(t.name)}</div>
+      <div class="meta"><span>${esc(t.author||'匿名')}</span><span>v${esc(t.version||'1.0')}</span>
+        <span>${esc(t.sizeText||'')}</span></div>
+      <div class="desc">${esc(t.description||'暂无简介')}</div>
+      <div class="tags">${tags}</div>
+      <div class="row"><span class="meta">↓ ${t.downloads||0} 次下载</span>
+        <a class="dl" href="${esc(t.download)}" download>下载主题</a></div>
+    </div></div>`;
+}
+async function load(){
+  try{
+    const r=await fetch('/api/themes'); const list=await r.json();
+    document.getElementById('count').textContent=list.length;
+    document.getElementById('empty').style.display=list.length?'none':'block';
+    document.getElementById('grid').innerHTML=list.map(card).join('');
+  }catch(e){
+    document.getElementById('empty').style.display='block';
+    document.getElementById('empty').textContent='无法连接商店服务：'+e.message;
+  }
+}
+document.getElementById('form').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const f=e.target, btn=document.getElementById('submit'), msg=document.getElementById('msg');
+  const fd=new FormData(f);
+  btn.disabled=true; msg.className='msg'; msg.textContent='正在上传…';
+  try{
+    const r=await fetch('/api/themes',{method:'POST',body:fd});
+    const data=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(data.detail||('HTTP '+r.status));
+    msg.className='msg ok'; msg.textContent='发布成功：'+data.name;
+    f.reset(); load();
+  }catch(err){
+    msg.className='msg err'; msg.textContent='上传失败：'+err.message;
+  }finally{btn.disabled=false;}
+});
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,20 @@
+# 运行时数据（上传的主题包、预览图、元数据）
+store_data/
+*.zip.tmp
+upload_*.zip
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+
+# 系统 / 编辑器
+.DS_Store
+.idea/
+.vscode/
+
+# 环境变量 / 密钥
+.env
