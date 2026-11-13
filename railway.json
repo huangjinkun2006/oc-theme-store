@@ -1,0 +1,19 @@
+{
+  "$schema": "https://railway.app/railway.schema.json",
+  "build": {
+    "builder": "DOCKERFILE",
+    "dockerfilePath": "Dockerfile"
+  },
+  "deploy": {
+    "startCommand": "uvicorn store_server:app --host 0.0.0.0 --port $PORT",
+    "healthcheckPath": "/api/health",
+    "healthcheckTimeout": 100,
+    "restartPolicyType": "ON_FAILURE",
+    "restartPolicyMaxRetries": 3
+  },
+  "variables": {
+    "STORE_DATA": "/data/ocstore",
+    "STORE_TITLE": "OC Theme Studio 主题商店",
+    "PYTHON_VERSION": "3.12"
+  }
+}

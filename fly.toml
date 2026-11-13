@@ -1,0 +1,25 @@
+# Fly.io 配置：免费档自带 3GB 持久磁盘（免费且持久，是长期运营的最佳选择）。
+# 用法：
+#   1. 装好 flyctl 并登录：brew install flyctl && flyctl auth login
+#   2. flyctl launch --no-deploy   （按提示选区域，如 hkg / sin）
+#   3. flyctl volumes create ocstore_data --size 1 --region <上面选的区域>
+#   4. flyctl deploy
+app = "oc-theme-store"
+primary_region = "hkg"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  STORE_DATA = "/data/ocstore"
+  STORE_TITLE = "OC Theme Studio 主题商店"
+  PYTHON_VERSION = "3.12"
+
+[mounts]
+  source = "ocstore_data"
+  destination = "/data"
+
+[[vm]]
+  size = "shared-cpu-1x"
+  memory = "256mb"
+  processes = ["app"]

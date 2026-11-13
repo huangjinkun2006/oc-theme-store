@@ -34,22 +34,39 @@ python store_server.py
 
 ## 部署到托管平台
 
-### Render（推荐，有一键配置）
-本仓库已含 [render.yaml](render.yaml)。在 Render 选择 **New → Blueprint**，连接本仓库即可。
-> 免费实例磁盘是临时的，重启会清空上传内容。要长期保存，在 `render.yaml` 中启用 `disk` 段并挂载到 `/var/data`。
+> ⚠️ **免费档持久性提醒**：Render / Railway 的**免费实例磁盘是临时的**——服务重启或休眠后，用户上传的主题会被清空（已播种的示例主题会在启动时自动重新生成，不会丢）。要长期保存用户上传内容，请用下面标 ✅ 持久的平台，或给 Render 实例挂持久磁盘（付费）。
 
-### Railway / Heroku 类平台
-已含 [Procfile](Procfile)，平台会自动执行 `uvicorn ... --port $PORT`。
-在平台设置持久 Volume 并挂载到 `STORE_DATA` 指向的目录。
+### ✅ Fly.io（免费 + 真持久，长期运营首选）
+免费档自带 3GB 持久磁盘，上传的主题永久保留。本仓库已含 [fly.toml](fly.toml)：
+```bash
+brew install flyctl && flyctl auth login
+flyctl launch --no-deploy          # 选区域（如 hkg / sin）
+flyctl volumes create ocstore_data --size 1 --region <上一步选的区域>
+flyctl deploy
+```
+部署完会给出 `https://oc-theme-store.fly.dev` 这样的公网地址。
 
-### Docker / VPS
+### Render（免费，但磁盘临时；不需要信用卡）
+本仓库已含 [render.yaml](render.yaml)，最省事：
+1. 打开 https://dashboard.render.com → **New → Blueprint**
+2. 连接本 GitHub 仓库 `huangjinkun2006/oc-theme-store`
+3. 确认 blueprint，点 **Apply** 即可，几分钟后得到 `https://xxx.onrender.com`
+> 想让上传持久：编辑 `render.yaml` 取消 `disk` 段注释并挂载 `/var/data`（需付费实例）。
+
+### Railway（免费试用额度，磁盘临时）
+本仓库已含 [railway.json](railway.json)：
+1. https://railway.app → **New Project → Deploy from GitHub repo**
+2. 选择本仓库，Railway 会自动用 Dockerfile 构建并启动
+> 免费额度用完后需付费；持久化需另挂 Volume 到 `STORE_DATA`。
+
+### Docker / VPS（自己有服务器，最可控）
 ```bash
 docker compose up -d          # 含命名卷 ocstore-data，重启不丢数据
 ```
 或 `docker build -t oc-theme-store . && docker run -p 8000:8000 -v $(pwd)/data:/data oc-theme-store`
 
 ### 任意 Python 托管
-只要能跑 `uvicorn store_server:app --host 0.0.0.0 --port $PORT` 即可（含 WorkBuddy 应用发布、Fly.io、PythonAnywhere 等）。
+只要能跑 `uvicorn store_server:app --host 0.0.0.0 --port $PORT` 即可（含 WorkBuddy 应用发布、PythonAnywhere 等）。
 
 ---
 
