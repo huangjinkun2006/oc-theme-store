@@ -184,17 +184,29 @@ async function load(){
     document.getElementById('empty').textContent='无法连接商店服务：'+e.message;
   }
 }
+const MAX_UPLOAD_MB = 200;  // 与服务端 nginx client_max_body_size / STORE_MAX_MB 保持一致
 document.getElementById('form').addEventListener('submit', async e=>{
   e.preventDefault();
   const f=e.target, btn=document.getElementById('submit'), msg=document.getElementById('msg');
   const fd=new FormData(f);
-  btn.disabled=true; msg.className='msg'; msg.textContent='正在上传…';
+  const pkg=fd.get('package');
+  const sizeMB=pkg&&pkg.size?pkg.size/1048576:0;
+  if(sizeMB>MAX_UPLOAD_MB){
+    msg.className='msg err';
+    msg.textContent=`主题包 ${sizeMB.toFixed(1)} MB，超过 ${MAX_UPLOAD_MB} MB 上限，请精简后重试`;
+    return;
+  }
+  btn.disabled=true; msg.className='msg';
+  msg.textContent=sizeMB>20
+    ? `正在上传 ${sizeMB.toFixed(1)} MB，大文件可能需要 1-2 分钟，请勿关闭页面…`
+    : '正在上传…';
   try{
     const tok=document.getElementById('uploadToken').value.trim();
     const headers=tok?{'X-Upload-Token':tok}:{};
     const r=await fetch('/api/themes',{method:'POST',body:fd,headers:headers});
     const data=await r.json().catch(()=>({}));
-    if(!r.ok) throw new Error(data.detail||('HTTP '+r.status));
+    if(!r.ok) throw new Error(data.detail||(r.status===413
+      ? `主题包过大，超过服务器 ${MAX_UPLOAD_MB} MB 上限` : 'HTTP '+r.status));
     msg.className='msg ok'; msg.textContent='发布成功：'+data.name;
     f.reset(); load();
   }catch(err){

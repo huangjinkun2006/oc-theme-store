@@ -27,7 +27,7 @@ python store_server.py
 | `STORE_DATA` | `./store_data` | 数据目录 **← 要持久化就挂这个目录** |
 | `STORE_SEED_DIR` | `./samples` | 示例主题 zip 目录 |
 | `STORE_TITLE` | `OC Theme Studio 主题商店` | 网页标题 |
-| `STORE_MAX_MB` | `50` | 单个主题包大小上限 |
+| `STORE_MAX_MB` | `50` | 单个主题包大小上限（MB）。**调大时必须同步调 nginx 的 `client_max_body_size` 与超时**，否则大请求会先在 nginx 被 413 拒绝、到不了后端；参考 `deploy/nginx.conf`。网页端 `web/index.html` 的 `MAX_UPLOAD_MB` 也需保持一致 |
 | `STORE_ICP_BEIAN` | `闽ICP备2024073090号-1` | 首页底部展示的备案号，设为空则不展示 |
 | `STORE_ICP_ICON` | `1` | 备案号前的中性装饰小图标，设 `0` 关闭。工信部未下发官方 ICP 图标，此图标为自绘装饰，不冒充官方徽标 |
 | `STORE_POLICE_BEIAN` | `闽公网安备35092202000207号` | 公安联网备案号，设为空则不展示 |
