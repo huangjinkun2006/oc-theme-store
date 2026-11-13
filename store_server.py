@@ -29,6 +29,8 @@ OC Theme Studio · 主题商店后端（可自托管 / 可部署到任意 Python
     STORE_MAX_MB        单个主题包大小上限（MB），默认 50
     STORE_ICP_BEIAN     首页底部展示的 ICP 备案号（空则不展示）
     STORE_ICP_ICON      备案号前的中性装饰小图标，设 0 关闭（默认开启）
+    STORE_POLICE_BEIAN  公安联网备案号（空则不展示）
+    STORE_POLICE_ICON   公安备案警徽图标地址，默认 /static/ghs.png（平台官方素材）
     STORE_UPLOAD_TOKEN  可选上传口令；设置后 POST /api/themes 需带 X-Upload-Token
     STORE_ADMIN_TOKEN   删除口令；未设置时 DELETE 接口直接禁用
 
@@ -97,6 +99,14 @@ ICP_ICON_SVG = (
     '<path d="M4.3 5.4h7.4M4.3 8h7.4M4.3 10.6h4.8" stroke="#2f6bff" '
     'stroke-width="1.1" stroke-linecap="round"/></svg>'
 )
+
+# 公安联网备案：图标为用户从「全国互联网安全管理服务平台 → 已备案网站 →
+# 公安机关备案号详情」下载的官方素材（36x40 PNG），本地托管在 web/ghs.png，
+# 不自行绘制警徽。查询链接沿用平台给出的代码片段格式。
+POLICE_BEIAN = os.environ.get("STORE_POLICE_BEIAN", "闽公网安备35092202000207号").strip()
+_m = re.search(r"(\d{8,})", POLICE_BEIAN)
+POLICE_CODE = _m.group(1) if _m else ""
+POLICE_ICON = os.environ.get("STORE_POLICE_ICON", "/static/ghs.png").strip()
 
 # 上传口令为「可选」设计：未设置时完全开放（兼容现有 Mac App 上传），
 # 设置后网页端 / App 端都需带 X-Upload-Token 头，启用前请同步改 App。
@@ -279,13 +289,36 @@ def index():
     f = WEB_DIR / "index.html"
     if not f.exists():
         return HTMLResponse("<h1>OC Theme Studio 主题商店</h1><p>缺少 web/index.html</p>")
-    beian = ""
+    rel = 'target="_blank" rel="noopener noreferrer"'
+    parts = []
     if ICP_BEIAN:
         icon = ICP_ICON_SVG if ICP_ICON else ""
-        beian = ('<a href="https://beian.miit.gov.cn/" target="_blank" '
-                 'rel="noopener noreferrer">' + icon + html_escape(ICP_BEIAN) + '</a>')
-    # 占位符在 web/index.html 的页脚，未配置备案号时整行留空
+        parts.append('<a href="https://beian.miit.gov.cn/" ' + rel + '>'
+                     + icon + html_escape(ICP_BEIAN) + '</a>')
+    if POLICE_BEIAN:
+        badge = ('<img class="ghs" src="' + html_escape(POLICE_ICON) + '" alt="">'
+                 if POLICE_ICON else "")
+        href = ("https://beian.mps.gov.cn/#/query/webSearch?code=" + POLICE_CODE
+                if POLICE_CODE else "https://beian.mps.gov.cn/")
+        parts.append('<a href="' + href + '" ' + rel + '>'
+                     + badge + html_escape(POLICE_BEIAN) + '</a>')
+    beian = '<span class="sep">｜</span>'.join(parts)
+    # 占位符在 web/index.html 的页脚，两者都未配置时整行留空
     return HTMLResponse(f.read_text(encoding="utf-8").replace("<!--ICP_BEIAN-->", beian))
+
+
+@app.get("/static/{filename}")
+def serve_web_static(filename: str):
+    """页脚备案图标等 web/ 下的静态素材；文件名与后缀白名单防目录穿越。"""
+    if not re.match(r"^[A-Za-z0-9._-]{1,64}$", filename):
+        raise HTTPException(status_code=400, detail="非法文件名")
+    if Path(filename).suffix.lower() not in (".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"):
+        raise HTTPException(status_code=400, detail="不支持的文件类型")
+    target = (WEB_DIR / filename).resolve()
+    if not str(target).startswith(str(WEB_DIR.resolve())) or not target.is_file():
+        raise HTTPException(status_code=404, detail="文件不存在")
+    mime = mimetypes.guess_type(str(target))[0] or "application/octet-stream"
+    return FileResponse(target, media_type=mime)
 
 
 @app.get("/api/health")

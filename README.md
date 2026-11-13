@@ -30,6 +30,8 @@ python store_server.py
 | `STORE_MAX_MB` | `50` | 单个主题包大小上限 |
 | `STORE_ICP_BEIAN` | `闽ICP备2024073090号-1` | 首页底部展示的备案号，设为空则不展示 |
 | `STORE_ICP_ICON` | `1` | 备案号前的中性装饰小图标，设 `0` 关闭。工信部未下发官方 ICP 图标，此图标为自绘装饰，不冒充官方徽标 |
+| `STORE_POLICE_BEIAN` | `闽公网安备35092202000207号` | 公安联网备案号，设为空则不展示 |
+| `STORE_POLICE_ICON` | `/static/ghs.png` | 公安备案警徽，取自平台「已备案网站 → 公安机关备案号详情」下载的官方素材，本地托管于 `web/ghs.png` |
 | `STORE_UPLOAD_TOKEN` | 空 | 可选上传口令；设置后 `POST /api/themes` 需带 `X-Upload-Token` 头 |
 | `STORE_ADMIN_TOKEN` | 空 | 删除口令；**未设置时 `DELETE` 接口直接禁用**，设置后需带 `X-Admin-Token` 头 |
 
@@ -97,6 +99,7 @@ docker compose up -d          # 含命名卷 ocstore-data，重启不丢数据
 | `POST` | `/api/themes` | 上传主题（multipart；启用 `STORE_UPLOAD_TOKEN` 时需带 `X-Upload-Token`） |
 | `DELETE` | `/api/themes/{id}` | 删除（默认禁用，配置 `STORE_ADMIN_TOKEN` 后才可用） |
 | `GET` | `/files/{id}/{path}` | 预览图等静态文件（含目录穿越防护） |
+| `GET` | `/static/{filename}` | 页脚备案图标等 `web/` 下静态素材（文件名 + 后缀白名单） |
 
 `POST /api/themes` 表单字段：`name*`、`author`、`description`、`version`、`tags`（逗号分隔）、`package*`（.zip）、`previews`（多张图片，可重复）。
 
