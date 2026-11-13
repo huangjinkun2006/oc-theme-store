@@ -29,6 +29,7 @@ python store_server.py
 | `STORE_TITLE` | `OC Theme Studio 主题商店` | 网页标题 |
 | `STORE_MAX_MB` | `50` | 单个主题包大小上限 |
 | `STORE_ICP_BEIAN` | `闽ICP备2024073090号-1` | 首页底部展示的备案号，设为空则不展示 |
+| `STORE_ICP_ICON` | `1` | 备案号前的中性装饰小图标，设 `0` 关闭。工信部未下发官方 ICP 图标，此图标为自绘装饰，不冒充官方徽标 |
 | `STORE_UPLOAD_TOKEN` | 空 | 可选上传口令；设置后 `POST /api/themes` 需带 `X-Upload-Token` 头 |
 | `STORE_ADMIN_TOKEN` | 空 | 删除口令；**未设置时 `DELETE` 接口直接禁用**，设置后需带 `X-Admin-Token` 头 |
 

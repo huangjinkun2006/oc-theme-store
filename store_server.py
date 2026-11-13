@@ -28,6 +28,7 @@ OC Theme Studio · 主题商店后端（可自托管 / 可部署到任意 Python
     STORE_TITLE         网页商店标题
     STORE_MAX_MB        单个主题包大小上限（MB），默认 50
     STORE_ICP_BEIAN     首页底部展示的 ICP 备案号（空则不展示）
+    STORE_ICP_ICON      备案号前的中性装饰小图标，设 0 关闭（默认开启）
     STORE_UPLOAD_TOKEN  可选上传口令；设置后 POST /api/themes 需带 X-Upload-Token
     STORE_ADMIN_TOKEN   删除口令；未设置时 DELETE 接口直接禁用
 
@@ -83,6 +84,20 @@ WEB_DIR = ROOT / "web"
 # ICP 备案号：依法需在网站主页显著位置标明并链接到工信部备案系统。
 # 可用 STORE_ICP_BEIAN 覆盖；设为空字符串则不展示。
 ICP_BEIAN = os.environ.get("STORE_ICP_BEIAN", "闽ICP备2024073090号-1").strip()
+
+# 工信部并未下发「ICP 备案图标」，官方只要求标明备案编号并链接备案系统。
+# 这里自绘一个中性的「备案文件」小标记，纯装饰、不冒充任何官方徽标；
+# 设 STORE_ICP_ICON=0 可关闭。若需换成自己的图片，替换这段 SVG 即可。
+ICP_ICON = os.environ.get("STORE_ICP_ICON", "1") != "0"
+ICP_ICON_SVG = (
+    '<svg class="ba-icon" viewBox="0 0 16 16" width="14" height="14" '
+    'aria-hidden="true" focusable="false">'
+    '<rect x="1.5" y="1" width="13" height="14" rx="2.5" fill="#eaf0ff" '
+    'stroke="#2f6bff" stroke-width="1"/>'
+    '<path d="M4.3 5.4h7.4M4.3 8h7.4M4.3 10.6h4.8" stroke="#2f6bff" '
+    'stroke-width="1.1" stroke-linecap="round"/></svg>'
+)
+
 # 上传口令为「可选」设计：未设置时完全开放（兼容现有 Mac App 上传），
 # 设置后网页端 / App 端都需带 X-Upload-Token 头，启用前请同步改 App。
 UPLOAD_TOKEN = os.environ.get("STORE_UPLOAD_TOKEN", "")
@@ -266,8 +281,9 @@ def index():
         return HTMLResponse("<h1>OC Theme Studio 主题商店</h1><p>缺少 web/index.html</p>")
     beian = ""
     if ICP_BEIAN:
+        icon = ICP_ICON_SVG if ICP_ICON else ""
         beian = ('<a href="https://beian.miit.gov.cn/" target="_blank" '
-                 'rel="noopener noreferrer">' + html_escape(ICP_BEIAN) + '</a>')
+                 'rel="noopener noreferrer">' + icon + html_escape(ICP_BEIAN) + '</a>')
     # 占位符在 web/index.html 的页脚，未配置备案号时整行留空
     return HTMLResponse(f.read_text(encoding="utf-8").replace("<!--ICP_BEIAN-->", beian))
 
