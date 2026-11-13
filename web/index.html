@@ -70,7 +70,12 @@
     padding:40px;text-align:center;color:var(--muted)}
   .foot{margin-top:26px;font-size:11.5px;color:var(--muted);text-align:center;line-height:1.9}
   .pill{display:inline-block;background:#fff2d8;color:#9a6a00;border-radius:6px;
-    padding:2px 8px;font-size:11px;margin-bottom:12px}
+    padding:2px 8px;font-size:11px;margin-bottom:10px}
+  .notice{font-size:11px;line-height:1.7;color:var(--muted);background:#f7f9fc;
+    border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-bottom:12px}
+  .beian{margin-top:8px}
+  .beian a{color:var(--muted)}
+  .beian a:hover{color:var(--accent)}
 </style>
 </head>
 <body>
@@ -98,6 +103,7 @@
       <div class="panel">
         <h2>上传主题</h2>
         <div class="pill">上传后所有用户都能下载并应用</div>
+        <div class="notice">上传即表示你有权分享该主题，且内容不含侵权、违法违规信息。本站为爱好者非经营性分享站，不对用户上传内容负责，管理员有权移除不当主题。</div>
         <form id="form">
           <label>主题名称 *</label>
           <input type="text" name="name" required placeholder="例如：Acidanthera GoldenGate">
@@ -117,6 +123,8 @@
           <div class="file">PNG / JPG，第一张作为封面
             <input type="file" name="previews" accept="image/*" multiple>
           </div>
+          <label>上传口令（服务器启用时填写，可留空）</label>
+          <input type="text" id="uploadToken" placeholder="留空即可" autocomplete="off">
           <button class="submit" type="submit" id="submit">发布主题</button>
           <div class="msg" id="msg"></div>
         </form>
@@ -127,6 +135,7 @@
   <div class="foot">
     在 macOS 版 <b>OC Theme Studio</b> 的「主题商店」窗口地址栏填入上方地址，即可下载并一键应用主题。<br>
     后端为纯文件存储、无数据库；部分免费托管重启会清空上传内容，生产环境请挂载持久磁盘。
+    <div class="beian"><!--ICP_BEIAN--></div>
   </div>
 </div>
 
@@ -178,7 +187,9 @@ document.getElementById('form').addEventListener('submit', async e=>{
   const fd=new FormData(f);
   btn.disabled=true; msg.className='msg'; msg.textContent='正在上传…';
   try{
-    const r=await fetch('/api/themes',{method:'POST',body:fd});
+    const tok=document.getElementById('uploadToken').value.trim();
+    const headers=tok?{'X-Upload-Token':tok}:{};
+    const r=await fetch('/api/themes',{method:'POST',body:fd,headers:headers});
     const data=await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(data.detail||('HTTP '+r.status));
     msg.className='msg ok'; msg.textContent='发布成功：'+data.name;

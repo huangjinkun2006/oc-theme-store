@@ -28,7 +28,9 @@ python store_server.py
 | `STORE_SEED_DIR` | `./samples` | 示例主题 zip 目录 |
 | `STORE_TITLE` | `OC Theme Studio 主题商店` | 网页标题 |
 | `STORE_MAX_MB` | `50` | 单个主题包大小上限 |
-| `STORE_ADMIN_TOKEN` | 空 | 设置后 `DELETE /api/themes/{id}` 需带 `X-Admin-Token` 头 |
+| `STORE_ICP_BEIAN` | `闽ICP备2024073090号-1` | 首页底部展示的备案号，设为空则不展示 |
+| `STORE_UPLOAD_TOKEN` | 空 | 可选上传口令；设置后 `POST /api/themes` 需带 `X-Upload-Token` 头 |
+| `STORE_ADMIN_TOKEN` | 空 | 删除口令；**未设置时 `DELETE` 接口直接禁用**，设置后需带 `X-Admin-Token` 头 |
 
 ---
 
@@ -91,8 +93,8 @@ docker compose up -d          # 含命名卷 ocstore-data，重启不丢数据
 | `GET` | `/api/themes` | 主题列表（数组） |
 | `GET` | `/api/themes/{id}` | 主题详情 |
 | `GET` | `/api/themes/{id}/download` | 下载 zip（下载次数 +1） |
-| `POST` | `/api/themes` | 上传主题（multipart） |
-| `DELETE` | `/api/themes/{id}` | 删除（可选，见 `STORE_ADMIN_TOKEN`） |
+| `POST` | `/api/themes` | 上传主题（multipart；启用 `STORE_UPLOAD_TOKEN` 时需带 `X-Upload-Token`） |
+| `DELETE` | `/api/themes/{id}` | 删除（默认禁用，配置 `STORE_ADMIN_TOKEN` 后才可用） |
 | `GET` | `/files/{id}/{path}` | 预览图等静态文件（含目录穿越防护） |
 
 `POST /api/themes` 表单字段：`name*`、`author`、`description`、`version`、`tags`（逗号分隔）、`package*`（.zip）、`previews`（多张图片，可重复）。
@@ -120,6 +122,7 @@ curl -F "name=MyTheme" -F "author=me" -F "package=@theme.zip" \
 
 ## 安全说明
 
-- 已做：`..` 目录穿越防护、id 白名单正则、zip 有效性校验、大小上限、文件名清洗、CORS 放开（供 App 跨域调用）。
-- **未做**：用户账号体系、上传鉴权、内容审核、限流。公开部署前建议自行加一层网关鉴权，或设置 `STORE_ADMIN_TOKEN` 管理删除权限。
+- 已做：`..` 目录穿越防护、id 白名单正则、zip 有效性校验、大小上限、文件名清洗、CORS 放开（供 App 跨域调用）、删除接口默认禁用、首页备案号展示与上传须知。
+- **上传鉴权为可选**：默认开放以兼容现有 Mac App；设置 `STORE_UPLOAD_TOKEN` 后，网页端可在「上传口令」栏填写，**但 Mac App 端也需同步支持 `X-Upload-Token` 头并重新打包，否则 App 上传会被拒**。
+- **未做**：用户账号体系、内容审核、限流。公开部署前建议加一层网关鉴权；`STORE_ADMIN_TOKEN` 仅用于开放删除接口。
 - 若用于公网长期运营，请把 `STORE_DATA` 放在持久磁盘并定期备份。

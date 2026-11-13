@@ -27,6 +27,9 @@ OC Theme Studio · 主题商店后端（可自托管 / 可部署到任意 Python
     STORE_SEED_DIR      示例主题 zip 目录，默认 ./samples
     STORE_TITLE         网页商店标题
     STORE_MAX_MB        单个主题包大小上限（MB），默认 50
+    STORE_ICP_BEIAN     首页底部展示的 ICP 备案号（空则不展示）
+    STORE_UPLOAD_TOKEN  可选上传口令；设置后 POST /api/themes 需带 X-Upload-Token
+    STORE_ADMIN_TOKEN   删除口令；未设置时 DELETE 接口直接禁用
 
 接口（App 与网页共用）：
     GET  /                       网页商店首页
@@ -50,6 +53,7 @@ import uuid
 import shutil
 import zipfile
 import mimetypes
+from html import escape as html_escape
 from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional, List
@@ -75,6 +79,14 @@ TITLE = os.environ.get("STORE_TITLE", "OC Theme Studio 主题商店")
 MAX_MB = int(os.environ.get("STORE_MAX_MB", "50"))
 MAX_BYTES = MAX_MB * 1024 * 1024
 WEB_DIR = ROOT / "web"
+
+# ICP 备案号：依法需在网站主页显著位置标明并链接到工信部备案系统。
+# 可用 STORE_ICP_BEIAN 覆盖；设为空字符串则不展示。
+ICP_BEIAN = os.environ.get("STORE_ICP_BEIAN", "闽ICP备2024073090号-1").strip()
+# 上传口令为「可选」设计：未设置时完全开放（兼容现有 Mac App 上传），
+# 设置后网页端 / App 端都需带 X-Upload-Token 头，启用前请同步改 App。
+UPLOAD_TOKEN = os.environ.get("STORE_UPLOAD_TOKEN", "")
+ADMIN_TOKEN = os.environ.get("STORE_ADMIN_TOKEN", "")
 
 ID_RE = re.compile(r"^[A-Za-z0-9_\-]{2,48}$")
 SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9._\-]")
@@ -250,9 +262,14 @@ def on_startup():
 @app.get("/", response_class=HTMLResponse)
 def index():
     f = WEB_DIR / "index.html"
-    if f.exists():
-        return HTMLResponse(f.read_text(encoding="utf-8"))
-    return HTMLResponse("<h1>OC Theme Studio 主题商店</h1><p>缺少 web/index.html</p>")
+    if not f.exists():
+        return HTMLResponse("<h1>OC Theme Studio 主题商店</h1><p>缺少 web/index.html</p>")
+    beian = ""
+    if ICP_BEIAN:
+        beian = ('<a href="https://beian.miit.gov.cn/" target="_blank" '
+                 'rel="noopener noreferrer">' + html_escape(ICP_BEIAN) + '</a>')
+    # 占位符在 web/index.html 的页脚，未配置备案号时整行留空
+    return HTMLResponse(f.read_text(encoding="utf-8").replace("<!--ICP_BEIAN-->", beian))
 
 
 @app.get("/api/health")
@@ -293,6 +310,7 @@ def download_theme(tid: str):
 
 @app.post("/api/themes")
 async def upload_theme(
+    request: Request,
     name: str = Form(...),
     author: str = Form(""),
     description: str = Form(""),
@@ -301,6 +319,9 @@ async def upload_theme(
     package: UploadFile = File(...),
     previews: List[UploadFile] = File(None),
 ):
+    # 可选上传口令：未配置 STORE_UPLOAD_TOKEN 时保持开放，兼容现有 App
+    if UPLOAD_TOKEN and request.headers.get("X-Upload-Token") != UPLOAD_TOKEN:
+        raise HTTPException(status_code=401, detail="上传口令不正确")
     name = (name or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="主题名称不能为空")
@@ -348,9 +369,10 @@ async def upload_theme(
 
 @app.delete("/api/themes/{tid}")
 def delete_theme(tid: str, request: Request):
-    """可选删除接口；设置 STORE_ADMIN_TOKEN 后需带 X-Admin-Token 头。"""
-    token = os.environ.get("STORE_ADMIN_TOKEN", "")
-    if token and request.headers.get("X-Admin-Token") != token:
+    """删除接口：未配置 STORE_ADMIN_TOKEN 时直接禁用，避免任何人匿名删除主题。"""
+    if not ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="未配置 STORE_ADMIN_TOKEN，删除接口已禁用")
+    if request.headers.get("X-Admin-Token") != ADMIN_TOKEN:
         raise HTTPException(status_code=403, detail="无权删除")
     if not ID_RE.match(tid) or not theme_dir(tid).exists():
         raise HTTPException(status_code=404, detail="主题不存在")
