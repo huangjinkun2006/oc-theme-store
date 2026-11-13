@@ -65,6 +65,8 @@ docker compose up -d          # 含命名卷 ocstore-data，重启不丢数据
 ```
 或 `docker build -t oc-theme-store . && docker run -p 8000:8000 -v $(pwd)/data:/data oc-theme-store`
 
+**七牛云云服务器（国内 + 自有域名，推荐给国内用户）**：见 [`deploy/七牛云部署.md`](deploy/七牛云部署.md) —— 一台 Ubuntu 云服务器 + 一条命令 `curl .../deploy/setup.sh | sudo bash` 即可起服务，再用你的域名做 A 记录 + nginx 反代 + certbot HTTPS（可选七牛云 CDN 加速）。
+
 ### 任意 Python 托管
 只要能跑 `uvicorn store_server:app --host 0.0.0.0 --port $PORT` 即可（含 WorkBuddy 应用发布、PythonAnywhere 等）。
 
