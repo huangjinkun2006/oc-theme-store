@@ -1,9 +1,10 @@
 # OC Theme Studio · 主题商店后端
 
-给 [OC Theme Studio](https://github.com/huangjinkun2006/oc-theme-store) macOS 原生 App 用的主题共享后端。
-支持**多用户上传主题**（名称 / 作者 / 版本 / 标签 / 简介 / 主题压缩包 / 预览图）与**其他用户下载并一键应用**。
+给 [OC Theme Studio](https://github.com/huangjinkun2006/oc-theme-studio) macOS 原生 App 用的主题共享后端。
+支持**多用户上传主题**（名称 / 作者 / 版本 / 分类 / 标签 / 简介 / 主题压缩包 / 预览图）与**其他用户按分类筛选、下载并一键应用**。
 
 - 纯 Python + FastAPI，**无数据库**（主题以文件夹形式存储：`meta.json` + `package.zip` + `previews/`）
+- 内置 4 个分类：**完整主题 / 图标区 / 背景区 / 字体区**；早期没有分类字段的主题自动归为「完整主题」
 - 自带**网页版商店**：没装 Mac App 的 Windows / Linux 用户也能用浏览器浏览、上传、下载
 - App 与网页共用同一套 HTTP 接口
 - 首次启动自动从 `samples/*.zip` 播种 3 个内置示例主题，商店不会空
@@ -93,7 +94,8 @@ docker compose up -d          # 含命名卷 ocstore-data，重启不丢数据
 |---|---|---|
 | `GET` | `/` | 网页商店首页 |
 | `GET` | `/api/health` | 健康检查 `{ok, service, themes}` |
-| `GET` | `/api/themes` | 主题列表（数组） |
+| `GET` | `/api/categories` | 分类列表 `[{id, label, count}]`，顺序固定 |
+| `GET` | `/api/themes` | 主题列表（数组）；可用 `?category=theme\|icons\|background\|fonts` 或中文名称过滤，`all` / 空表示全部 |
 | `GET` | `/api/themes/{id}` | 主题详情 |
 | `GET` | `/api/themes/{id}/download` | 下载 zip（下载次数 +1） |
 | `POST` | `/api/themes` | 上传主题（multipart；启用 `STORE_UPLOAD_TOKEN` 时需带 `X-Upload-Token`） |
@@ -101,16 +103,17 @@ docker compose up -d          # 含命名卷 ocstore-data，重启不丢数据
 | `GET` | `/files/{id}/{path}` | 预览图等静态文件（含目录穿越防护） |
 | `GET` | `/static/{filename}` | 页脚备案图标等 `web/` 下静态素材（文件名 + 后缀白名单） |
 
-`POST /api/themes` 表单字段：`name*`、`author`、`description`、`version`、`tags`（逗号分隔）、`package*`（.zip）、`previews`（多张图片，可重复）。
+`POST /api/themes` 表单字段：`name*`、`author`、`description`、`version`、`category`（`theme` / `icons` / `background` / `fonts` 或中文名称，默认 `theme`）、`tags`（逗号分隔）、`package*`（.zip）、`previews`（多张图片，可重复）。
 
 返回的主题对象字段：
-`id, name, author, description, version, tags[], thumbnail, download, previewCount, sizeText, updated, downloads`。
-其中 `thumbnail` / `download` 是以 `/` 开头的相对路径，由客户端拼接服务器地址。
+`id, name, author, description, version, tags[], category, categoryLabel, thumbnail, download, previewCount, sizeText, updated, downloads`。
+其中 `thumbnail` / `download` 是以 `/` 开头的相对路径，由客户端拼接服务器地址；`category` 存 slug，`categoryLabel` 是中文显示名。
 
 示例：
 ```bash
-curl https://your-store.example/api/themes
-curl -F "name=MyTheme" -F "author=me" -F "package=@theme.zip" \
+curl https://your-store.example/api/categories
+curl "https://your-store.example/api/themes?category=icons"
+curl -F "name=MyTheme" -F "author=me" -F "category=theme" -F "package=@theme.zip" \
      https://your-store.example/api/themes
 ```
 
@@ -121,6 +124,10 @@ curl -F "name=MyTheme" -F "author=me" -F "package=@theme.zip" \
 标准 OpenCore 主题 zip：内含 `Background*.png` 与若干 `.icns` 图标（也可为
 `EFI/OC/Resources/Image/...` 结构，App 会自动展平并重建 manifest）。
 `samples/` 下 3 个示例包即为此格式，可直接作为上传样例。
+
+分类只影响商店里的展示与筛选，不改变 zip 校验规则。「图标区 / 背景区 / 字体区」
+用于分享单类资源包时仍请打包为 `.zip`；纯字体包等不含完整主题结构的资源，
+下载后可手动取用，App 的「一键应用」仍要求包内能识别出主题。
 
 ---
 

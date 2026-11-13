@@ -32,6 +32,12 @@
   h2 .count{font-size:11px;font-weight:600;background:var(--accent-soft);color:var(--accent);
     border-radius:20px;padding:2px 9px}
   .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:16px}
+  .cats{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 16px}
+  .cat{background:var(--card);border:1px solid var(--line);color:#48536a;border-radius:20px;
+    padding:6px 13px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+  .cat:hover{border-color:var(--accent);color:var(--accent)}
+  .cat.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  .cat .n{font-size:10.5px;opacity:.75;margin-left:4px}
   .card{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;
     box-shadow:var(--shadow);display:flex;flex-direction:column}
   .thumb{aspect-ratio:16/9;background:#10151f;display:flex;align-items:center;justify-content:center;
@@ -44,6 +50,8 @@
     display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
   .tags{display:flex;gap:5px;flex-wrap:wrap}
   .tag{font-size:10.5px;background:#f0f3f9;color:#55617a;border-radius:5px;padding:2px 7px}
+  .cat-badge{font-size:10.5px;background:var(--accent-soft);color:var(--accent);
+    border-radius:5px;padding:1px 7px;font-weight:650}
   .row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}
   .dl{background:var(--accent);color:#fff;border:0;border-radius:7px;padding:7px 13px;
     font-size:12.5px;font-weight:600;cursor:pointer}
@@ -52,10 +60,11 @@
     padding:20px;box-shadow:var(--shadow);position:sticky;top:18px}
   label{display:block;font-size:12px;font-weight:600;margin:13px 0 5px;color:#3a4454}
   label:first-of-type{margin-top:0}
-  input[type=text],textarea{width:100%;border:1px solid var(--line);border-radius:8px;
+  input[type=text],textarea,select{width:100%;border:1px solid var(--line);border-radius:8px;
     padding:9px 11px;font:inherit;font-size:13px;background:#fbfcfe;color:var(--text)}
-  input[type=text]:focus,textarea:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+  input[type=text]:focus,textarea:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
   textarea{resize:vertical;min-height:70px}
+  .type-hint{font-size:11px;line-height:1.6;color:var(--muted);margin-top:6px}
   .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
   .file{border:1px dashed #c8d2e4;border-radius:8px;padding:11px;font-size:12px;
     color:var(--muted);background:#fbfcfe;margin-top:5px}
@@ -85,7 +94,7 @@
 <header>
   <div class="wrap">
     <h1>OC Theme Studio · 主题商店</h1>
-    <div class="sub">浏览、下载并上传 OpenCore 引导主题 — 任何平台都能通过浏览器参与</div>
+    <div class="sub">按完整主题 / 图标区 / 背景区 / 字体区浏览、下载并上传 OpenCore 资源 — 任何平台都能通过浏览器参与</div>
     <div class="bar">
       <span style="font-size:12px;opacity:.85">App 服务器地址</span>
       <code id="base"></code>
@@ -97,19 +106,28 @@
 <div class="wrap">
   <div class="cols">
     <section>
-      <h2>全部主题 <span class="count" id="count">0</span></h2>
+      <div class="cats" id="cats"></div>
+      <h2><span id="sectionTitle">全部主题</span> <span class="count" id="count">0</span></h2>
       <div class="grid" id="grid"></div>
       <div class="empty" id="empty" style="display:none">商店还没有主题，右侧上传第一个吧。</div>
     </section>
 
     <aside>
       <div class="panel">
-        <h2>上传主题</h2>
-        <div class="pill">上传后所有用户都能下载并应用</div>
+        <h2>上传主题 / 资源</h2>
+        <div class="pill">选择类型后，所有用户都能按分类浏览与下载</div>
         <div class="notice">上传即表示你有权分享该主题，且内容不含侵权、违法违规信息。本站为爱好者非经营性分享站，不对用户上传内容负责，管理员有权移除不当主题。</div>
         <form id="form">
           <label>主题名称 *</label>
           <input type="text" name="name" required placeholder="例如：Acidanthera GoldenGate">
+          <label>资源类型</label>
+          <select name="category" id="category">
+            <option value="theme">完整主题 · 背景 + 启动项图标</option>
+            <option value="icons">图标区 · 只分享启动项图标</option>
+            <option value="background">背景区 · 只分享背景图</option>
+            <option value="fonts">字体区 · 只分享字体文件</option>
+          </select>
+          <div class="type-hint" id="typeHint"></div>
           <div class="two">
             <div><label>作者</label><input type="text" name="author" placeholder="匿名"></div>
             <div><label>版本</label><input type="text" name="version" value="1.0"></div>
@@ -118,8 +136,8 @@
           <input type="text" name="tags" placeholder="简约, 深色, macOS">
           <label>简介</label>
           <textarea name="description" placeholder="主题特点、适用分辨率、说明…"></textarea>
-          <label>主题压缩包 * (.zip)</label>
-          <div class="file">包含 Background 图与 icns 图标的主题包
+          <label>资源压缩包 * (.zip)</label>
+          <div class="file">完整主题或单类资源包，均为 .zip
             <input type="file" name="package" accept=".zip" required>
           </div>
           <label>预览图（可选，可多选）</label>
@@ -128,7 +146,7 @@
           </div>
           <label>上传口令（服务器启用时填写，可留空）</label>
           <input type="text" id="uploadToken" placeholder="留空即可" autocomplete="off">
-          <button class="submit" type="submit" id="submit">发布主题</button>
+          <button class="submit" type="submit" id="submit">发布到商店</button>
           <div class="msg" id="msg"></div>
         </form>
       </div>
@@ -136,7 +154,7 @@
   </div>
 
   <div class="foot">
-    在 macOS 版 <b>OC Theme Studio</b> 的「主题商店」窗口地址栏填入上方地址，即可下载并一键应用主题。<br>
+    在 macOS 版 <b>OC Theme Studio</b> 的「主题商店」窗口地址栏填入上方地址，即可按分类浏览、下载并一键应用主题。<br>
     后端为纯文件存储、无数据库；部分免费托管重启会清空上传内容，生产环境请挂载持久磁盘。
     <div class="beian"><!--ICP_BEIAN--></div>
   </div>
@@ -159,29 +177,89 @@ function thumb(t){
   return t.thumbnail ? `<img src="${esc(t.thumbnail)}" alt="" loading="lazy"
       onerror="this.parentNode.textContent='无预览图'">` : '无预览图';
 }
+const CATEGORY_FALLBACK = [
+  {id:'theme',label:'完整主题',count:0},
+  {id:'icons',label:'图标区',count:0},
+  {id:'background',label:'背景区',count:0},
+  {id:'fonts',label:'字体区',count:0}
+];
+const CATEGORY_HINTS = {
+  theme:'完整主题：包含背景与启动项图标，可在 App 中直接导入应用。',
+  icons:'图标区：把 .icns 启动项图标打包成 .zip，App 会识别为仅图标包。',
+  background:'背景区：把 Background*.png / .icns 打包成 .zip。',
+  fonts:'字体区：把 .ttf / .otf 打包成 .zip；纯字体包请下载后手动取用。'
+};
+let categories = [{id:'all',label:'全部',count:0}].concat(CATEGORY_FALLBACK);
+let activeCat = 'all';
+
+function setCategoryHint(){
+  const v=document.getElementById('category').value;
+  document.getElementById('typeHint').textContent=
+    (CATEGORY_HINTS[v]||CATEGORY_HINTS.theme)+' 分类只用于商店展示与筛选，不改变 .zip 校验规则。';
+}
+document.getElementById('category').addEventListener('change', setCategoryHint);
+
 function card(t){
   const tags=(t.tags||[]).slice(0,4).map(x=>`<span class="tag">${esc(x)}</span>`).join('');
+  const dlText=(!t.category||t.category==='theme')?'下载主题':'下载资源';
   return `<div class="card">
     <div class="thumb">${thumb(t)}</div>
     <div class="body">
       <div class="name">${esc(t.name)}</div>
-      <div class="meta"><span>${esc(t.author||'匿名')}</span><span>v${esc(t.version||'1.0')}</span>
+      <div class="meta"><span class="cat-badge">${esc(t.categoryLabel||'完整主题')}</span>
+        <span>${esc(t.author||'匿名')}</span><span>v${esc(t.version||'1.0')}</span>
         <span>${esc(t.sizeText||'')}</span></div>
       <div class="desc">${esc(t.description||'暂无简介')}</div>
       <div class="tags">${tags}</div>
       <div class="row"><span class="meta">↓ ${t.downloads||0} 次下载</span>
-        <a class="dl" href="${esc(t.download)}" download>下载主题</a></div>
+        <a class="dl" href="${esc(t.download)}" download>${dlText}</a></div>
     </div></div>`;
 }
-async function load(){
+function renderCats(){
+  const box=document.getElementById('cats');
+  box.innerHTML=categories.map(c=>`<button type="button" class="cat${c.id===activeCat?' on':''}"
+    data-cat="${esc(c.id)}">${esc(c.label)}<span class="n">${c.count||0}</span></button>`).join('');
+  box.querySelectorAll('.cat').forEach(b=>b.addEventListener('click',()=>{
+    activeCat=b.dataset.cat; renderCats(); load();
+  }));
+}
+async function loadCategories(){
   try{
-    const r=await fetch('/api/themes'); const list=await r.json();
+    const r=await fetch('/api/categories');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const arr=await r.json();
+    if(!Array.isArray(arr)) throw new Error('分类数据格式异常');
+    const total=arr.reduce((s,x)=>s+(Number(x.count)||0),0);
+    categories=[{id:'all',label:'全部',count:total}].concat(arr.map(x=>({
+      id:String(x.id), label:String(x.label||x.id), count:Number(x.count)||0
+    })));
+  }catch(e){
+    categories=[{id:'all',label:'全部',count:0}].concat(CATEGORY_FALLBACK);
+  }
+  renderCats();
+}
+async function load(){
+  const q=activeCat==='all'?'/api/themes':'/api/themes?category='+encodeURIComponent(activeCat);
+  const empty=document.getElementById('empty');
+  const current=categories.find(c=>c.id===activeCat)||categories[0];
+  document.getElementById('sectionTitle').textContent=
+    activeCat==='all'?'全部主题':current.label;
+  try{
+    const r=await fetch(q);
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const list=await r.json();
+    if(!Array.isArray(list)) throw new Error('返回数据格式异常');
     document.getElementById('count').textContent=list.length;
-    document.getElementById('empty').style.display=list.length?'none':'block';
+    empty.style.display=list.length?'none':'block';
+    if(!list.length) empty.textContent=activeCat==='all'
+      ? '商店还没有主题，右侧上传第一个吧。'
+      : '「'+current.label+'」还没有资源，换个分类看看，或从右侧上传。';
     document.getElementById('grid').innerHTML=list.map(card).join('');
   }catch(e){
-    document.getElementById('empty').style.display='block';
-    document.getElementById('empty').textContent='无法连接商店服务：'+e.message;
+    document.getElementById('count').textContent='0';
+    document.getElementById('grid').innerHTML='';
+    empty.style.display='block';
+    empty.textContent='无法连接商店服务：'+e.message;
   }
 }
 const MAX_UPLOAD_MB = 200;  // 与服务端 nginx client_max_body_size / STORE_MAX_MB 保持一致
@@ -193,7 +271,7 @@ document.getElementById('form').addEventListener('submit', async e=>{
   const sizeMB=pkg&&pkg.size?pkg.size/1048576:0;
   if(sizeMB>MAX_UPLOAD_MB){
     msg.className='msg err';
-    msg.textContent=`主题包 ${sizeMB.toFixed(1)} MB，超过 ${MAX_UPLOAD_MB} MB 上限，请精简后重试`;
+    msg.textContent=`资源包 ${sizeMB.toFixed(1)} MB，超过 ${MAX_UPLOAD_MB} MB 上限，请精简后重试`;
     return;
   }
   btn.disabled=true; msg.className='msg';
@@ -206,14 +284,18 @@ document.getElementById('form').addEventListener('submit', async e=>{
     const r=await fetch('/api/themes',{method:'POST',body:fd,headers:headers});
     const data=await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(data.detail||(r.status===413
-      ? `主题包过大，超过服务器 ${MAX_UPLOAD_MB} MB 上限` : 'HTTP '+r.status));
-    msg.className='msg ok'; msg.textContent='发布成功：'+data.name;
-    f.reset(); load();
+      ? `资源包过大，超过服务器 ${MAX_UPLOAD_MB} MB 上限` : 'HTTP '+r.status));
+    msg.className='msg ok';
+    msg.textContent='发布成功：'+data.name+'（'+(data.categoryLabel||'完整主题')+'）';
+    f.reset(); setCategoryHint();
+    activeCat=data.category||'theme';
+    loadCategories().then(load);
   }catch(err){
     msg.className='msg err'; msg.textContent='上传失败：'+err.message;
   }finally{btn.disabled=false;}
 });
-load();
+setCategoryHint();
+loadCategories().then(load);
 </script>
 </body>
 </html>

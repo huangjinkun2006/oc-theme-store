@@ -37,10 +37,11 @@ OC Theme Studio · 主题商店后端（可自托管 / 可部署到任意 Python
 接口（App 与网页共用）：
     GET  /                       网页商店首页
     GET  /api/health             健康检查 JSON
-    GET  /api/themes             主题列表
+    GET  /api/categories         主题分类列表与数量
+    GET  /api/themes             主题列表（可用 ?category= 过滤）
     GET  /api/themes/{id}        主题详情
     GET  /api/themes/{id}/download  下载主题包 zip
-    POST /api/themes             上传主题（multipart）
+    POST /api/themes             上传主题（multipart，含 category）
     GET  /files/{id}/{path}      预览图等静态文件
 
 数据存储：纯文件系统，无数据库依赖。每个主题一个目录：
@@ -116,7 +117,29 @@ ADMIN_TOKEN = os.environ.get("STORE_ADMIN_TOKEN", "")
 ID_RE = re.compile(r"^[A-Za-z0-9_\-]{2,48}$")
 SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9._\-]")
 
-app = FastAPI(title=TITLE, version="1.1")
+# 主题分类：完整主题为默认值，兼容早期没有 category 字段的 meta.json。
+# 客户端可传 slug（theme/icons/background/fonts）或中文名称。
+CATEGORIES = [
+    ("theme", "完整主题"),
+    ("icons", "图标区"),
+    ("background", "背景区"),
+    ("fonts", "字体区"),
+]
+CATEGORY_LABELS = dict(CATEGORIES)
+DEFAULT_CATEGORY = "theme"
+
+
+def normalize_category(value) -> str:
+    """把上传 / 旧数据里的分类值统一成 slug；旧主题默认归为完整主题。"""
+    v = str(value or "").strip().lower()
+    if v in CATEGORY_LABELS:
+        return v
+    for cid, label in CATEGORIES:
+        if v == label:
+            return cid
+    return DEFAULT_CATEGORY
+
+app = FastAPI(title=TITLE, version="1.2")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
@@ -162,6 +185,7 @@ def list_meta() -> list:
 
 def to_public(meta: dict) -> dict:
     """内部元数据 -> 客户端 StoreTheme 需要的字段。"""
+    cat = normalize_category(meta.get("category"))
     return {
         "id": meta.get("id", ""),
         "name": meta.get("name", ""),
@@ -169,6 +193,8 @@ def to_public(meta: dict) -> dict:
         "description": meta.get("description", ""),
         "version": meta.get("version", ""),
         "tags": meta.get("tags", []),
+        "category": cat,
+        "categoryLabel": CATEGORY_LABELS[cat],
         "thumbnail": meta.get("thumbnail", ""),
         "download": f"/api/themes/{meta.get('id','')}/download",
         "previewCount": meta.get("previewCount", 0),
@@ -213,6 +239,7 @@ def extract_preview_from_zip(zf: zipfile.ZipFile, dest: Path, tid: str) -> Optio
 
 def add_theme_from_zip(path: Path, *, name: str, author: str,
                        description: str, version: str, tags: list,
+                       category: str = DEFAULT_CATEGORY,
                        previews: Optional[list] = None) -> dict:
     """从 zip 建立主题记录。previews 为 [(filename, bytes), ...]。"""
     tid = "t_" + uuid.uuid4().hex[:12]
@@ -249,7 +276,8 @@ def add_theme_from_zip(path: Path, *, name: str, author: str,
     size = path.stat().st_size
     meta = {
         "id": tid, "name": name, "author": author, "description": description,
-        "version": version, "tags": tags, "thumbnail": thumbnail or "",
+        "version": version, "tags": tags,
+        "category": normalize_category(category), "thumbnail": thumbnail or "",
         "previewCount": preview_count,
         "sizeText": size_text(size), "updated": now_iso(), "downloads": 0,
     }
@@ -270,7 +298,8 @@ def seed_if_needed():
             add_theme_from_zip(
                 z, name=z.stem, author="OC Theme Studio",
                 description=f"内置示例主题：{z.stem}。可直接下载并在 App 中应用。",
-                version="1.0", tags=["示例", "内置"])
+                version="1.0", tags=["示例", "内置"],
+                category=DEFAULT_CATEGORY)
         except Exception as e:
             print(f"[seed] 跳过 {z.name}: {e}")
     print(f"[seed] 已从 {SEED_DIR} 导入 {len(zips)} 个示例主题")
@@ -326,12 +355,34 @@ def health():
     return {"ok": True, "service": TITLE, "themes": len(list_meta())}
 
 
+@app.get("/api/categories")
+def get_categories():
+    """分类列表与数量；「全部」由客户端自行合成，不属于存储字段。"""
+    counts = {}
+    for m in list_meta():
+        c = normalize_category(m.get("category"))
+        counts[c] = counts.get(c, 0) + 1
+    return [{"id": cid, "label": label, "count": counts.get(cid, 0)}
+            for cid, label in CATEGORIES]
+
+
 # ---------------------------------------------------------------------------
 # API
 # ---------------------------------------------------------------------------
 @app.get("/api/themes")
-def get_themes():
-    return [to_public(m) for m in list_meta()]
+def get_themes(category: Optional[str] = None):
+    """主题列表；?category=theme|icons|background|fonts 或中文名称可过滤。"""
+    v = (category or "").strip().lower()
+    cat = None
+    if v and v not in ("all", "全部"):
+        if v in CATEGORY_LABELS:
+            cat = v
+        else:
+            cat = next((cid for cid, label in CATEGORIES if v == label), None)
+            if cat is None:
+                raise HTTPException(status_code=400, detail="未知分类：" + str(category))
+    return [to_public(m) for m in list_meta()
+            if cat is None or normalize_category(m.get("category")) == cat]
 
 
 @app.get("/api/themes/{tid}")
@@ -365,6 +416,7 @@ async def upload_theme(
     description: str = Form(""),
     version: str = Form("1.0"),
     tags: str = Form(""),
+    category: str = Form(DEFAULT_CATEGORY),
     package: UploadFile = File(...),
     previews: List[UploadFile] = File(None),
 ):
@@ -376,6 +428,10 @@ async def upload_theme(
         raise HTTPException(status_code=400, detail="主题名称不能为空")
     if len(name) > 80:
         name = name[:80]
+    cv = (category or "").strip().lower()
+    if cv and cv not in CATEGORY_LABELS and cv not in [label for _, label in CATEGORIES]:
+        raise HTTPException(status_code=400, detail="未知分类：" + str(category))
+    cat = normalize_category(category)
     if not package.filename or not package.filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="主题包必须是 .zip 文件")
 
@@ -407,7 +463,7 @@ async def upload_theme(
             author=(author or "匿名").strip()[:60],
             description=(description or "").strip()[:1000],
             version=(version or "1.0").strip()[:24],
-            tags=tag_list, previews=pv)
+            tags=tag_list, category=cat, previews=pv)
     finally:
         try:
             tmp.unlink()
