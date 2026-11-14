@@ -94,7 +94,7 @@
 <header>
   <div class="wrap">
     <h1>OC Theme Studio · 主题商店</h1>
-    <div class="sub">按完整主题 / 图标区 / 背景区 / 字体区浏览、下载并上传 OpenCore 资源 — 任何平台都能通过浏览器参与</div>
+    <div class="sub">按完整主题 / 图标区 / 背景区 / 字体区 / EFI 配置包浏览、下载并上传 OpenCore 资源 — 任何平台都能通过浏览器参与</div>
     <div class="bar">
       <span style="font-size:12px;opacity:.85">App 服务器地址</span>
       <code id="base"></code>
@@ -126,6 +126,7 @@
             <option value="icons">图标区 · 只分享启动项图标</option>
             <option value="background">背景区 · 只分享背景图</option>
             <option value="fonts">字体区 · 只分享字体文件</option>
+            <option value="efi">EFI 配置包 · 按分区生成并脱敏</option>
           </select>
           <div class="type-hint" id="typeHint"></div>
           <div class="two">
@@ -181,13 +182,15 @@ const CATEGORY_FALLBACK = [
   {id:'theme',label:'完整主题',count:0},
   {id:'icons',label:'图标区',count:0},
   {id:'background',label:'背景区',count:0},
-  {id:'fonts',label:'字体区',count:0}
+  {id:'fonts',label:'字体区',count:0},
+  {id:'efi',label:'EFI 配置包',count:0}
 ];
 const CATEGORY_HINTS = {
   theme:'完整主题：包含背景与启动项图标，可在 App 中直接导入应用。',
   icons:'图标区：把 .icns 启动项图标打包成 .zip，App 会识别为仅图标包。',
   background:'背景区：把 Background*.png / .icns 打包成 .zip。',
-  fonts:'字体区：把 .ttf / .otf 打包成 .zip；纯字体包请下载后手动取用。'
+  fonts:'字体区：把 .ttf / .otf 打包成 .zip；纯字体包请下载后手动取用。',
+  efi:'EFI 配置包：请用 Mac App 从已挂载的 EFI 分区生成，包内需含 oc-efi-manifest.json。App 会移除序列号 / MLB / ROM / NVRAM 等机器标识；请勿手动上传完整 config.plist。'
 };
 let categories = [{id:'all',label:'全部',count:0}].concat(CATEGORY_FALLBACK);
 let activeCat = 'all';
@@ -201,7 +204,8 @@ document.getElementById('category').addEventListener('change', setCategoryHint);
 
 function card(t){
   const tags=(t.tags||[]).slice(0,4).map(x=>`<span class="tag">${esc(x)}</span>`).join('');
-  const dlText=(!t.category||t.category==='theme')?'下载主题':'下载资源';
+  const dlText=t.category==='efi'?'下载配置包'
+    :(!t.category||t.category==='theme')?'下载主题':'下载资源';
   return `<div class="card">
     <div class="thumb">${thumb(t)}</div>
     <div class="body">

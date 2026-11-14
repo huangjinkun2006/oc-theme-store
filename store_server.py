@@ -118,12 +118,15 @@ ID_RE = re.compile(r"^[A-Za-z0-9_\-]{2,48}$")
 SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9._\-]")
 
 # 主题分类：完整主题为默认值，兼容早期没有 category 字段的 meta.json。
-# 客户端可传 slug（theme/icons/background/fonts）或中文名称。
+# 客户端可传 slug（theme/icons/background/fonts/efi）或中文名称。
+# efi 包由 Mac App 从已挂载分区生成，内含 oc-efi-manifest.json 与脱敏配置，
+# 服务端只按普通 zip 校验，具体脱敏与安装逻辑在 App 端。
 CATEGORIES = [
     ("theme", "完整主题"),
     ("icons", "图标区"),
     ("background", "背景区"),
     ("fonts", "字体区"),
+    ("efi", "EFI 配置包"),
 ]
 CATEGORY_LABELS = dict(CATEGORIES)
 DEFAULT_CATEGORY = "theme"
@@ -139,7 +142,7 @@ def normalize_category(value) -> str:
             return cid
     return DEFAULT_CATEGORY
 
-app = FastAPI(title=TITLE, version="1.2")
+app = FastAPI(title=TITLE, version="1.3")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
