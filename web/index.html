@@ -118,6 +118,27 @@
   .btn-logout{background:#fff;color:var(--err);border:1px solid #f0c4c4}
   .btn-logout:hover{background:#fff1f1}
   .modal .msg{margin-top:12px}
+  /* 删除二次确认：用页面内弹窗，不依赖浏览器原生 confirm（预览面板/WebView 会拦截） */
+  .confirm-mask{position:fixed;inset:0;background:rgba(16,24,40,.5);display:none;
+    align-items:center;justify-content:center;z-index:60;padding:20px}
+  .confirm-mask.show{display:flex}
+  .confirm-box{background:#fff;border-radius:14px;width:100%;max-width:380px;padding:22px;
+    box-shadow:0 20px 60px rgba(16,24,40,.3)}
+  .confirm-box h3{margin:0 0 8px;font-size:16px;color:var(--err)}
+  .confirm-box p{margin:0;font-size:13px;line-height:1.7;color:#48536a}
+  .confirm-box .tname{font-weight:650;color:var(--text)}
+  .confirm-box .actions{display:flex;gap:9px;margin-top:20px}
+  .confirm-box .actions button{flex:1;border-radius:8px;padding:10px;font-size:13px;
+    font-weight:650;cursor:pointer}
+  .btn-danger{background:var(--err);color:#fff;border:0}
+  .btn-danger:hover{filter:brightness(1.08)}
+  .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);
+    background:#1c2330;color:#fff;border-radius:9px;padding:11px 18px;font-size:13px;
+    box-shadow:0 8px 28px rgba(16,24,40,.28);opacity:0;pointer-events:none;
+    transition:opacity .22s,transform .22s;z-index:70;max-width:88vw;text-align:center}
+  .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
+  .toast.err{background:#b73333}
+  .toast.ok{background:#137a4d}
 </style>
 </head>
 <body>
@@ -128,7 +149,7 @@
         <h1>OC Theme Studio · 主题商店</h1>
         <div class="sub">按完整主题 / 图标区 / 背景区 / 字体区 / EFI 配置包浏览、下载并上传 OpenCore 资源 — 任何平台都能通过浏览器参与</div>
       </div>
-      <button class="admin-btn" id="adminBtn" style="display:none" onclick="openAdmin()">管理员登录</button>
+      <button class="admin-btn" id="adminBtn" onclick="openAdmin()">管理员登录</button>
     </div>
     <div class="bar">
       <span style="font-size:12px;opacity:.85">App 服务器地址</span>
@@ -203,7 +224,7 @@
     <form id="adminForm">
       <div id="adminUserRow">
         <label>账号</label>
-        <input type="text" id="adminUser" autocomplete="username" placeholder="admin">
+        <input type="text" id="adminUser" autocomplete="username" value="admin" placeholder="admin">
       </div>
       <label style="margin-top:11px" id="adminPassLabel">密码</label>
       <input type="password" id="adminPass" autocomplete="current-password" placeholder="管理员密码" required>
@@ -222,6 +243,19 @@
     </div>
   </div>
 </div>
+
+<div class="confirm-mask" id="confirmMask" onclick="if(event.target===this)closeConfirm()">
+  <div class="confirm-box" role="dialog" aria-modal="true">
+    <h3>删除主题？</h3>
+    <p>确定要删除 <span class="tname" id="confirmName"></span> 吗？<br>
+       主题包、预览图与下载记录都会被永久移除，此操作不可撤销。</p>
+    <div class="actions">
+      <button type="button" class="btn-ghost" onclick="closeConfirm()">取消</button>
+      <button type="button" class="btn-danger" id="confirmOk">确认删除</button>
+    </div>
+  </div>
+</div>
+<div class="toast" id="toast"></div>
 
 <script>
 const base = location.origin;
@@ -347,12 +381,13 @@ document.getElementById('adminForm').addEventListener('submit', async e=>{
       tok=document.getElementById('adminPass').value.trim();
       if(!tok) throw new Error('请输入管理口令');
     }else{
+      const user=(document.getElementById('adminUser').value||'').trim()||'admin';
       const r=await fetch('/api/admin/login',{method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({username:document.getElementById('adminUser').value,
+        body:JSON.stringify({username:user,
                              password:document.getElementById('adminPass').value})});
       const d=await r.json().catch(()=>({}));
-      if(!r.ok) throw new Error(d.detail||'登录失败');
+      if(!r.ok) throw new Error(d.detail||('登录失败（HTTP '+r.status+'）'));
       tok=d.token;
     }
     const vr=await fetch('/api/admin/session',{headers:{'X-Admin-Token':tok}});
@@ -365,27 +400,47 @@ document.getElementById('adminForm').addEventListener('submit', async e=>{
     msg.className='msg err'; msg.textContent=err.message;
   }finally{ btn.disabled=false; }
 });
-async function deleteTheme(b){
-  const id=b.dataset.id, name=b.dataset.name||'该主题';
-  if(!confirm(`确定要删除「${name}」吗？\n\n主题包、预览图与下载记录都会被永久移除，此操作不可撤销。`)) return;
-  b.disabled=true; b.textContent='删除中…';
+// ---- 页面内二次确认 + toast（不依赖原生 confirm/alert）----
+let pendingDelete=null;
+function showToast(text,kind){
+  const t=document.getElementById('toast');
+  t.textContent=text; t.className='toast show'+(kind?' '+kind:'');
+  clearTimeout(showToast._timer);
+  showToast._timer=setTimeout(()=>{t.className='toast';},3200);
+}
+function closeConfirm(){
+  document.getElementById('confirmMask').classList.remove('show');
+  pendingDelete=null;
+}
+function deleteTheme(b){
+  if(!adminToken){ showToast('请先点右上角「管理员登录」','err'); openAdmin(); return; }
+  pendingDelete={btn:b,id:b.dataset.id,name:b.dataset.name||'该主题'};
+  document.getElementById('confirmName').textContent='「'+pendingDelete.name+'」';
+  document.getElementById('confirmMask').classList.add('show');
+}
+document.getElementById('confirmOk').addEventListener('click', async ()=>{
+  if(!pendingDelete) return;
+  const {btn,id,name}=pendingDelete;
+  closeConfirm();
+  btn.disabled=true; btn.textContent='删除中…';
   try{
     const r=await fetch('/api/themes/'+encodeURIComponent(id),{
       method:'DELETE',headers:{'X-Admin-Token':adminToken}});
     const d=await r.json().catch(()=>({}));
     if(!r.ok){
-      if(r.status===401){
+      if(r.status===401||r.status===403){
         sessionStorage.removeItem('oc_admin_token'); adminToken=''; setAdminUI(false);
-        throw new Error('登录已过期，请重新登录');
+        throw new Error('登录已过期或无权删除，请重新登录管理员');
       }
-      throw new Error(d.detail||'HTTP '+r.status);
+      throw new Error(d.detail||('HTTP '+r.status));
     }
     await loadCategories(); await load();
+    showToast('已删除「'+name+'」','ok');
   }catch(err){
-    alert('删除失败：'+err.message);
-    b.disabled=false; b.textContent='删除';
+    showToast('删除失败：'+err.message,'err');
+    btn.disabled=false; btn.textContent='删除';
   }
-}
+});
 function renderCats(){
   const box=document.getElementById('cats');
   box.innerHTML=categories.map(c=>`<button type="button" class="cat${c.id===activeCat?' on':''}"
