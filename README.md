@@ -34,7 +34,39 @@ python store_server.py
 | `STORE_POLICE_BEIAN` | `闽公网安备35092202000207号` | 公安联网备案号，设为空则不展示 |
 | `STORE_POLICE_ICON` | `/static/ghs.png` | 公安备案警徽，取自平台「已备案网站 → 公安机关备案号详情」下载的官方素材，本地托管于 `web/ghs.png` |
 | `STORE_UPLOAD_TOKEN` | 空 | 可选上传口令；设置后 `POST /api/themes` 需带 `X-Upload-Token` 头 |
-| `STORE_ADMIN_TOKEN` | 空 | 删除口令；**未设置时 `DELETE` 接口直接禁用**，设置后需带 `X-Admin-Token` 头 |
+| `STORE_ADMIN_USER` | `admin` | 管理员账号 |
+| `STORE_ADMIN_PASSWORD` | 空 | 管理员密码，**不设置则登录与删除接口一律禁用**。推荐哈希形式 `sha256$<hex>` |
+| `STORE_ADMIN_SESSION_HOURS` | `8` | 登录会话有效期（小时） |
+| `STORE_ADMIN_MAX_FAILS` | `5` | 登录失败次数上限 |
+| `STORE_ADMIN_LOCK_SECONDS` | `60` | 超过失败上限后的锁定时长（秒） |
+| `STORE_ADMIN_TOKEN` | 空 | 旧的静态删除口令（兼容脚本/旧客户端）；与登录会话任一通过即可删除 |
+
+### 管理员登录
+
+网页右上角「管理员登录」输入账号密码，登录成功后每个主题卡片出现「删除」按钮（带二次确认）。
+会话 token 存在浏览器 `sessionStorage`，关闭标签页即失效；服务端会话默认 8 小时过期，重启服务也会清空。
+
+密码**不要写进代码仓库**，只在服务器上通过环境变量注入。推荐用哈希（避免明文出现在 unit 文件里）：
+
+```bash
+printf '%s' '你的强密码' | shasum -a 256
+# 得到 hex，然后设置：
+STORE_ADMIN_PASSWORD='sha256$这里填hex'
+STORE_ADMIN_USER='admin'
+```
+
+systemd 部署示例（`/etc/systemd/system/oc-theme-store.service` 的 `[Service]` 段）：
+
+```ini
+Environment=STORE_ADMIN_USER=admin
+Environment=STORE_ADMIN_PASSWORD=sha256$<hex>
+```
+
+或更稳妥地用只读的 `EnvironmentFile=/etc/oc-theme-store.env`（`chmod 600`，避免密码被普通用户读到）。
+改完 `sudo systemctl daemon-reload && sudo systemctl restart oc-theme-store`。
+
+> 只配 `STORE_ADMIN_TOKEN`、不配账号密码时，网页会退化成「直接填管理口令」模式；
+> 两者都不配时，登录入口隐藏、`DELETE` 返回 403。
 
 ---
 
@@ -99,9 +131,25 @@ docker compose up -d          # 含命名卷 ocstore-data，重启不丢数据
 | `GET` | `/api/themes/{id}` | 主题详情 |
 | `GET` | `/api/themes/{id}/download` | 下载 zip（下载次数 +1） |
 | `POST` | `/api/themes` | 上传主题（multipart；启用 `STORE_UPLOAD_TOKEN` 时需带 `X-Upload-Token`） |
-| `DELETE` | `/api/themes/{id}` | 删除（默认禁用，配置 `STORE_ADMIN_TOKEN` 后才可用） |
+| `DELETE` | `/api/themes/{id}` | 删除主题，需 `X-Admin-Token`（登录会话 token 或静态口令）；**未配置任何管理员凭据时返回 403** |
+| `GET` | `/api/admin/status` | `{enabled, staticToken, sessionHours}`，网页据此决定是否显示登录入口 |
+| `POST` | `/api/admin/login` | JSON `{username, password}` → `{ok, token, expiresAt}`，含失败限速 |
+| `POST` | `/api/admin/logout` | 注销当前会话 |
+| `GET` | `/api/admin/session` | 带 `X-Admin-Token` 返回 `{valid, user}`，用于刷新页面时恢复登录态 |
 | `GET` | `/files/{id}/{path}` | 预览图等静态文件（含目录穿越防护） |
 | `GET` | `/static/{filename}` | 页脚备案图标等 `web/` 下静态素材（文件名 + 后缀白名单） |
+
+管理员接口示例：
+
+```bash
+curl -X POST https://your-store.example/api/admin/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"你的密码"}'
+# → {"ok":true,"token":"...","expiresAt":...}
+
+curl -X DELETE https://your-store.example/api/themes/t_xxxx \
+  -H 'X-Admin-Token: 上一步拿到的 token'
+```
 
 `POST /api/themes` 表单字段：`name*`、`author`、`description`、`version`、`category`（`theme` / `icons` / `background` / `fonts` / `efi` 或中文名称，默认 `theme`）、`tags`（逗号分隔）、`package*`（.zip）、`previews`（多张图片，可重复）。
 
@@ -139,7 +187,8 @@ curl -F "name=MyTheme" -F "author=me" -F "category=theme" -F "package=@theme.zip
 
 ## 安全说明
 
-- 已做：`..` 目录穿越防护、id 白名单正则、zip 有效性校验、大小上限、文件名清洗、CORS 放开（供 App 跨域调用）、删除接口默认禁用、首页备案号展示与上传须知。
+- 已做：`..` 目录穿越防护、id 白名单正则、zip 有效性校验、大小上限、文件名清洗、CORS 放开（供 App 跨域调用）、首页备案号展示与上传须知。
+- **管理员登录**：账号密码只从服务器环境变量注入（推荐 `sha256$<hex>` 哈希），账号与密码都用常量时间比较；会话 token 随机生成、默认 8 小时过期、重启即失效；登录接口按来源 IP 做失败次数限速（默认 5 次 / 锁 60 秒）。未配置任何凭据时 `DELETE` 返回 403、登录入口隐藏。旧的 `STORE_ADMIN_TOKEN` 静态口令保留兼容。
 - **上传鉴权为可选**：默认开放以兼容现有 Mac App；设置 `STORE_UPLOAD_TOKEN` 后，网页端可在「上传口令」栏填写，**但 Mac App 端也需同步支持 `X-Upload-Token` 头并重新打包，否则 App 上传会被拒**。
-- **未做**：用户账号体系、内容审核、限流。公开部署前建议加一层网关鉴权；`STORE_ADMIN_TOKEN` 仅用于开放删除接口。
+- **仍未做**：多用户账号体系、内容审核、上传限流。会话与限速状态在进程内存里，多实例部署时各自独立；公开部署建议再套一层网关鉴权与 HTTPS。
 - 若用于公网长期运营，请把 `STORE_DATA` 放在持久磁盘并定期备份。

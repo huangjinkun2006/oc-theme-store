@@ -32,7 +32,13 @@ OC Theme Studio · 主题商店后端（可自托管 / 可部署到任意 Python
     STORE_POLICE_BEIAN  公安联网备案号（空则不展示）
     STORE_POLICE_ICON   公安备案警徽图标地址，默认 /static/ghs.png（平台官方素材）
     STORE_UPLOAD_TOKEN  可选上传口令；设置后 POST /api/themes 需带 X-Upload-Token
-    STORE_ADMIN_TOKEN   删除口令；未设置时 DELETE 接口直接禁用
+    STORE_ADMIN_USER    管理员账号（默认 admin）
+    STORE_ADMIN_PASSWORD 管理员密码；支持明文或 "sha256$<hex>" 哈希（推荐哈希）。
+                        未设置时登录与删除接口一律禁用
+    STORE_ADMIN_TOKEN   旧的静态删除口令（兼容保留）；与登录会话任一通过即可删除
+    STORE_ADMIN_SESSION_HOURS  登录会话有效期（小时，默认 8）
+    STORE_ADMIN_MAX_FAILS      登录失败次数上限（默认 5）
+    STORE_ADMIN_LOCK_SECONDS   超限后锁定时长（秒，默认 60）
 
 接口（App 与网页共用）：
     GET  /                       网页商店首页
@@ -42,7 +48,12 @@ OC Theme Studio · 主题商店后端（可自托管 / 可部署到任意 Python
     GET  /api/themes/{id}        主题详情
     GET  /api/themes/{id}/download  下载主题包 zip
     POST /api/themes             上传主题（multipart，含 category）
+    DELETE /api/themes/{id}      删除主题（需管理员登录会话或静态口令）
     GET  /files/{id}/{path}      预览图等静态文件
+    GET  /api/admin/status       管理员登录是否启用
+    POST /api/admin/login        账号密码登录，签发会话 token
+    POST /api/admin/logout       注销会话
+    GET  /api/admin/session      校验当前会话是否有效
 
 数据存储：纯文件系统，无数据库依赖。每个主题一个目录：
     store_data/themes/<id>/meta.json + package.zip + previews/
@@ -54,9 +65,14 @@ import os
 import re
 import json
 import uuid
+import time
+import hmac
+import hashlib
+import secrets
 import shutil
 import zipfile
 import mimetypes
+import threading
 from html import escape as html_escape
 from pathlib import Path
 from datetime import datetime, timezone
@@ -112,7 +128,27 @@ POLICE_ICON = os.environ.get("STORE_POLICE_ICON", "/static/ghs.png").strip()
 # 上传口令为「可选」设计：未设置时完全开放（兼容现有 Mac App 上传），
 # 设置后网页端 / App 端都需带 X-Upload-Token 头，启用前请同步改 App。
 UPLOAD_TOKEN = os.environ.get("STORE_UPLOAD_TOKEN", "")
+
+# ---------------------------------------------------------------------------
+# 管理员登录
+# ---------------------------------------------------------------------------
+# 账号密码只从服务器环境变量读取，绝不写进代码仓库 / 前端。
+# 密码建议用哈希形式：printf '%s' '你的密码' | shasum -a 256 得到 hex，
+# 设 STORE_ADMIN_PASSWORD="sha256$<hex>"；也兼容明文（便于本地测试）。
+ADMIN_USER = os.environ.get("STORE_ADMIN_USER", "admin").strip() or "admin"
+ADMIN_PASSWORD = os.environ.get("STORE_ADMIN_PASSWORD", "")
+ADMIN_SESSION_HOURS = max(1, int(os.environ.get("STORE_ADMIN_SESSION_HOURS", "8")))
+ADMIN_MAX_FAILS = max(1, int(os.environ.get("STORE_ADMIN_MAX_FAILS", "5")))
+ADMIN_LOCK_SECONDS = max(1, int(os.environ.get("STORE_ADMIN_LOCK_SECONDS", "60")))
+# 旧的静态删除口令，保留向后兼容（脚本 / 旧版客户端可不登录直接删）。
 ADMIN_TOKEN = os.environ.get("STORE_ADMIN_TOKEN", "")
+
+# 会话与失败限速都是进程内状态：重启即失效，符合这个无数据库后端的定位。
+_SESSIONS: dict = {}          # token -> {"exp": float, "user": str}
+_FAILS: dict = {}             # client ip -> {"count": int, "until": float}
+_ADMIN_LOCK = threading.Lock()
+
+ADMIN_ENABLED = bool(ADMIN_PASSWORD)
 
 ID_RE = re.compile(r"^[A-Za-z0-9_\-]{2,48}$")
 SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9._\-]")
@@ -142,7 +178,7 @@ def normalize_category(value) -> str:
             return cid
     return DEFAULT_CATEGORY
 
-app = FastAPI(title=TITLE, version="1.3")
+app = FastAPI(title=TITLE, version="1.4")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], allow_methods=["*"], allow_headers=["*"],
@@ -314,6 +350,117 @@ def on_startup():
 
 
 # ---------------------------------------------------------------------------
+# 管理员登录：鉴权工具
+# ---------------------------------------------------------------------------
+def client_ip(request: Request) -> str:
+    """反代后取真实来源 IP（nginx 已设 X-Forwarded-For）。"""
+    xff = request.headers.get("x-forwarded-for", "")
+    if xff:
+        return xff.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+def password_ok(given: str) -> bool:
+    """常量时间比较密码。支持 sha256$<hex> 哈希或明文。"""
+    if not ADMIN_ENABLED:
+        return False
+    given = given or ""
+    if ADMIN_PASSWORD.startswith("sha256$"):
+        want = ADMIN_PASSWORD[len("sha256$"):].strip().lower()
+        got = hashlib.sha256(given.encode("utf-8")).hexdigest()
+        return hmac.compare_digest(got, want)
+    return hmac.compare_digest(given, ADMIN_PASSWORD)
+
+
+def new_session(user: str):
+    tok = secrets.token_urlsafe(32)
+    exp = time.time() + ADMIN_SESSION_HOURS * 3600
+    with _ADMIN_LOCK:
+        # 顺手清理过期会话，避免长期运行堆积
+        now = time.time()
+        for k in [k for k, v in _SESSIONS.items() if v["exp"] <= now]:
+            _SESSIONS.pop(k, None)
+        _SESSIONS[tok] = {"exp": exp, "user": user}
+    return tok, exp
+
+
+def session_user(tok: str) -> Optional[str]:
+    if not tok:
+        return None
+    with _ADMIN_LOCK:
+        rec = _SESSIONS.get(tok)
+        if not rec:
+            return None
+        if rec["exp"] <= time.time():
+            _SESSIONS.pop(tok, None)
+            return None
+        return rec["user"]
+
+
+def drop_session(tok: str):
+    with _ADMIN_LOCK:
+        _SESSIONS.pop(tok, None)
+
+
+def admin_token_from(request: Request) -> str:
+    """会话 token 来源：X-Admin-Token 或 Authorization: Bearer。"""
+    h = request.headers.get("x-admin-token", "").strip()
+    if h:
+        return h
+    auth = request.headers.get("authorization", "")
+    if auth.lower().startswith("bearer "):
+        return auth[7:].strip()
+    return ""
+
+
+def admin_authorized(request: Request) -> bool:
+    """登录会话 token 与旧的静态口令，任一通过即视为管理员。"""
+    tok = admin_token_from(request)
+    if not tok:
+        return False
+    if session_user(tok) is not None:
+        return True
+    return bool(ADMIN_TOKEN) and hmac.compare_digest(tok, ADMIN_TOKEN)
+
+
+def locked_seconds(ip: str) -> int:
+    """返回剩余锁定秒数；同时清理已过期锁定与过期的失败计数窗口。"""
+    with _ADMIN_LOCK:
+        st = _FAILS.get(ip)
+        if not st:
+            return 0
+        now = time.time()
+        left = st["until"] - now
+        if left > 0:
+            return int(left) + 1
+        # 只在「曾进入锁定且已解锁」或「失败计数窗口过期」时清空；
+        # until==0 表示仍在累计失败次数，绝不能在这里清掉。
+        if st["until"] > 0 or now - st.get("last", 0) > ADMIN_LOCK_SECONDS:
+            _FAILS.pop(ip, None)
+        return 0
+
+
+def note_fail(ip: str) -> int:
+    """记一次登录失败；达到上限返回锁定秒数，否则返回 0。"""
+    with _ADMIN_LOCK:
+        st = _FAILS.get(ip, {"count": 0, "until": 0.0, "last": 0.0})
+        st["count"] += 1
+        st["last"] = time.time()
+        if st["count"] >= ADMIN_MAX_FAILS:
+            st["until"] = time.time() + ADMIN_LOCK_SECONDS
+            st["count"] = 0
+            _FAILS[ip] = st
+            return ADMIN_LOCK_SECONDS
+        _FAILS[ip] = st
+        return 0
+
+
+def clear_fails(ip: str):
+    with _ADMIN_LOCK:
+        _FAILS.pop(ip, None)
+
+
+# ---------------------------------------------------------------------------
 # 网页商店
 # ---------------------------------------------------------------------------
 @app.get("/", response_class=HTMLResponse)
@@ -477,15 +624,73 @@ async def upload_theme(
 
 @app.delete("/api/themes/{tid}")
 def delete_theme(tid: str, request: Request):
-    """删除接口：未配置 STORE_ADMIN_TOKEN 时直接禁用，避免任何人匿名删除主题。"""
-    if not ADMIN_TOKEN:
-        raise HTTPException(status_code=403, detail="未配置 STORE_ADMIN_TOKEN，删除接口已禁用")
-    if request.headers.get("X-Admin-Token") != ADMIN_TOKEN:
-        raise HTTPException(status_code=403, detail="无权删除")
+    """删除主题：需管理员登录会话或旧静态口令；都没配置时接口直接禁用。"""
+    if not ADMIN_ENABLED and not ADMIN_TOKEN:
+        raise HTTPException(status_code=403, detail="未配置管理员账号，删除接口已禁用")
+    if not admin_authorized(request):
+        raise HTTPException(status_code=401, detail="请先登录管理员账号")
     if not ID_RE.match(tid) or not theme_dir(tid).exists():
         raise HTTPException(status_code=404, detail="主题不存在")
     shutil.rmtree(theme_dir(tid))
     return {"ok": True}
+
+
+@app.get("/api/admin/status")
+def admin_status():
+    """给网页用：是否启用了管理员登录（不泄露账号/口令本身）。"""
+    return {"enabled": ADMIN_ENABLED, "staticToken": bool(ADMIN_TOKEN),
+            "sessionHours": ADMIN_SESSION_HOURS}
+
+
+@app.post("/api/admin/login")
+async def admin_login(request: Request):
+    """账号密码登录，成功签发随机会话 token。"""
+    if not ADMIN_ENABLED:
+        raise HTTPException(status_code=403, detail="未配置管理员密码，登录已禁用")
+    ip = client_ip(request)
+    wait = locked_seconds(ip)
+    if wait:
+        raise HTTPException(status_code=429, detail=f"尝试过于频繁，请 {wait} 秒后再试")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="请求格式错误")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="请求格式错误")
+    user = str(body.get("username") or "").strip()
+    pwd = str(body.get("password") or "")
+    # 账号也用常量时间比较，避免通过响应时间枚举有效账号
+    user_ok = hmac.compare_digest(user, ADMIN_USER)
+    pwd_ok = password_ok(pwd)
+    if not (user_ok and pwd_ok):
+        lock = note_fail(ip)
+        if lock:
+            raise HTTPException(status_code=429, detail=f"密码错误次数过多，请 {lock} 秒后再试")
+        raise HTTPException(status_code=401, detail="账号或密码不正确")
+    clear_fails(ip)
+    tok, exp = new_session(ADMIN_USER)
+    return {"ok": True, "token": tok, "user": ADMIN_USER,
+            "expiresAt": exp, "sessionHours": ADMIN_SESSION_HOURS}
+
+
+@app.post("/api/admin/logout")
+def admin_logout(request: Request):
+    tok = admin_token_from(request)
+    if tok:
+        drop_session(tok)
+    return {"ok": True}
+
+
+@app.get("/api/admin/session")
+def admin_session(request: Request):
+    """刷新页面时校验会话是否仍有效。"""
+    tok = admin_token_from(request)
+    user = session_user(tok)
+    if user:
+        return {"valid": True, "user": user, "static": False}
+    if ADMIN_TOKEN and tok and hmac.compare_digest(tok, ADMIN_TOKEN):
+        return {"valid": True, "user": ADMIN_USER, "static": True}
+    return {"valid": False}
 
 
 @app.get("/files/{tid}/{rest:path}")

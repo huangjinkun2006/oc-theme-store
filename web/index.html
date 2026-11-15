@@ -17,6 +17,7 @@
   .wrap{max-width:1120px;margin:0 auto;padding:0 22px 60px}
   header{background:linear-gradient(135deg,#1b2740,#2f6bff);color:#fff;padding:34px 0 30px;margin-bottom:26px}
   header .wrap{padding-bottom:0}
+  .head-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
   h1{margin:0 0 6px;font-size:24px;letter-spacing:.3px}
   .sub{opacity:.82;font-size:13px}
   .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:20px;
@@ -88,13 +89,47 @@
   .beian .ghs{height:18px;width:auto;vertical-align:-4px;margin-right:5px}
   .beian .sep{color:#c8cedb;margin:0 8px}
   .beian a:hover{color:var(--accent)}
+  /* 管理员 */
+  .admin-btn{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.35);
+    border-radius:7px;padding:6px 13px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+  .admin-btn:hover{background:rgba(255,255,255,.26)}
+  .admin-btn .dot{display:inline-block;width:7px;height:7px;border-radius:50%;
+    background:#4ade80;margin-right:6px;vertical-align:1px}
+  .del{background:#fff;color:var(--err);border:1px solid #f0c4c4;border-radius:7px;
+    padding:6px 11px;font-size:12px;font-weight:600;cursor:pointer}
+  .del:hover{background:#fff1f1;border-color:var(--err)}
+  .row .dl{margin-left:auto}
+  .modal-mask{position:fixed;inset:0;background:rgba(16,24,40,.5);display:none;
+    align-items:center;justify-content:center;z-index:50;padding:20px}
+  .modal-mask.show{display:flex}
+  .modal{background:#fff;border-radius:14px;width:100%;max-width:360px;padding:24px;
+    box-shadow:0 20px 60px rgba(16,24,40,.3)}
+  .modal h3{margin:0 0 4px;font-size:17px}
+  .modal .hint{font-size:12px;color:var(--muted);margin:0 0 16px;line-height:1.6}
+  .modal input[type=password]{width:100%;border:1px solid var(--line);border-radius:8px;
+    padding:9px 11px;font:inherit;font-size:13px;background:#fbfcfe;color:var(--text);margin-top:5px}
+  .modal input[type=password]:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+  .modal .actions{display:flex;gap:9px;margin-top:18px}
+  .modal .actions button{flex:1;border-radius:8px;padding:10px;font-size:13px;font-weight:650;cursor:pointer}
+  .btn-primary{background:var(--accent);color:#fff;border:0}
+  .btn-primary:hover{filter:brightness(1.08)}
+  .btn-ghost{background:#fff;color:#48536a;border:1px solid var(--line)}
+  .btn-ghost:hover{background:#f5f7fb}
+  .btn-logout{background:#fff;color:var(--err);border:1px solid #f0c4c4}
+  .btn-logout:hover{background:#fff1f1}
+  .modal .msg{margin-top:12px}
 </style>
 </head>
 <body>
 <header>
   <div class="wrap">
-    <h1>OC Theme Studio · 主题商店</h1>
-    <div class="sub">按完整主题 / 图标区 / 背景区 / 字体区 / EFI 配置包浏览、下载并上传 OpenCore 资源 — 任何平台都能通过浏览器参与</div>
+    <div class="head-top">
+      <div>
+        <h1>OC Theme Studio · 主题商店</h1>
+        <div class="sub">按完整主题 / 图标区 / 背景区 / 字体区 / EFI 配置包浏览、下载并上传 OpenCore 资源 — 任何平台都能通过浏览器参与</div>
+      </div>
+      <button class="admin-btn" id="adminBtn" style="display:none" onclick="openAdmin()">管理员登录</button>
+    </div>
     <div class="bar">
       <span style="font-size:12px;opacity:.85">App 服务器地址</span>
       <code id="base"></code>
@@ -161,6 +196,33 @@
   </div>
 </div>
 
+<div class="modal-mask" id="adminMask" onclick="if(event.target===this)closeAdmin()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="adminTitle">
+    <h3 id="adminTitle">管理员登录</h3>
+    <p class="hint">登录后可删除商店里不当的主题资源。账号密码由站点管理员在服务器配置，不会出现在网页中。</p>
+    <form id="adminForm">
+      <div id="adminUserRow">
+        <label>账号</label>
+        <input type="text" id="adminUser" autocomplete="username" placeholder="admin">
+      </div>
+      <label style="margin-top:11px" id="adminPassLabel">密码</label>
+      <input type="password" id="adminPass" autocomplete="current-password" placeholder="管理员密码" required>
+      <div class="actions">
+        <button type="button" class="btn-ghost" onclick="closeAdmin()">取消</button>
+        <button type="submit" class="btn-primary" id="adminSubmit">登录</button>
+      </div>
+      <div class="msg" id="adminMsg"></div>
+    </form>
+    <div id="adminLoggedIn" style="display:none">
+      <p class="hint" style="margin:0 0 16px">当前已登录管理员，主题卡片上会显示「删除」按钮。</p>
+      <div class="actions">
+        <button type="button" class="btn-ghost" onclick="closeAdmin()">关闭</button>
+        <button type="button" class="btn-logout" onclick="adminLogout()">退出登录</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 const base = location.origin;
 document.getElementById('base').textContent = base;
@@ -206,6 +268,9 @@ function card(t){
   const tags=(t.tags||[]).slice(0,4).map(x=>`<span class="tag">${esc(x)}</span>`).join('');
   const dlText=t.category==='efi'?'下载配置包'
     :(!t.category||t.category==='theme')?'下载主题':'下载资源';
+  const delBtn=isAdmin
+    ? `<button class="del" data-id="${esc(t.id)}" data-name="${esc(t.name)}" onclick="deleteTheme(this)">删除</button>`
+    : '';
   return `<div class="card">
     <div class="thumb">${thumb(t)}</div>
     <div class="body">
@@ -216,8 +281,110 @@ function card(t){
       <div class="desc">${esc(t.description||'暂无简介')}</div>
       <div class="tags">${tags}</div>
       <div class="row"><span class="meta">↓ ${t.downloads||0} 次下载</span>
-        <a class="dl" href="${esc(t.download)}" download>${dlText}</a></div>
+        ${delBtn}<a class="dl" href="${esc(t.download)}" download>${dlText}</a></div>
     </div></div>`;
+}
+
+// ---- 管理员登录 ----
+let adminToken = sessionStorage.getItem('oc_admin_token') || '';
+let isAdmin = false;       // 会话校验通过后才为 true
+let adminMode = 'account'; // 'account' = 账号密码；'token' = 仅静态口令兼容模式
+
+function setAdminUI(on){
+  isAdmin = on;
+  const btn=document.getElementById('adminBtn');
+  btn.innerHTML = on ? '<span class="dot"></span>管理员 · 已登录' : '管理员登录';
+  document.getElementById('adminForm').style.display = on ? 'none' : '';
+  document.getElementById('adminLoggedIn').style.display = on ? '' : 'none';
+}
+function openAdmin(){
+  document.getElementById('adminMsg').className='msg';
+  document.getElementById('adminMsg').textContent='';
+  document.getElementById('adminMask').classList.add('show');
+  setAdminUI(isAdmin);
+  if(!isAdmin) setTimeout(()=>document.getElementById(adminMode==='account'?'adminUser':'adminPass').focus(),50);
+}
+function closeAdmin(){ document.getElementById('adminMask').classList.remove('show'); }
+async function checkSession(){
+  if(!adminToken){ setAdminUI(false); return; }
+  try{
+    const r=await fetch('/api/admin/session',{headers:{'X-Admin-Token':adminToken}});
+    const d=await r.json().catch(()=>({}));
+    if(d.valid){ setAdminUI(true); load(); }
+    else { sessionStorage.removeItem('oc_admin_token'); adminToken=''; setAdminUI(false); }
+  }catch(e){ setAdminUI(false); }
+}
+async function initAdmin(){
+  try{
+    const r=await fetch('/api/admin/status');
+    const st=await r.json();
+    const btn=document.getElementById('adminBtn');
+    if(!st.enabled && !st.staticToken){ btn.style.display='none'; return; }
+    btn.style.display='';
+    if(!st.enabled){ // 只配了旧的静态口令：退化为「直接填口令」模式
+      adminMode='token';
+      document.getElementById('adminUserRow').style.display='none';
+      document.getElementById('adminPassLabel').textContent='管理口令';
+      document.getElementById('adminPass').placeholder='静态管理口令';
+      document.getElementById('adminTitle').textContent='管理员验证';
+    }
+  }catch(e){ /* 后端老版本无 status 接口：保持隐藏，不影响浏览 */ }
+  checkSession();
+}
+async function adminLogout(){
+  try{ await fetch('/api/admin/logout',{method:'POST',headers:{'X-Admin-Token':adminToken}}); }
+  catch(e){}
+  sessionStorage.removeItem('oc_admin_token'); adminToken='';
+  setAdminUI(false); closeAdmin(); load();
+}
+document.getElementById('adminForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const msg=document.getElementById('adminMsg'), btn=document.getElementById('adminSubmit');
+  msg.className='msg'; msg.textContent='正在验证…'; btn.disabled=true;
+  try{
+    let tok;
+    if(adminMode==='token'){
+      tok=document.getElementById('adminPass').value.trim();
+      if(!tok) throw new Error('请输入管理口令');
+    }else{
+      const r=await fetch('/api/admin/login',{method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({username:document.getElementById('adminUser').value,
+                             password:document.getElementById('adminPass').value})});
+      const d=await r.json().catch(()=>({}));
+      if(!r.ok) throw new Error(d.detail||'登录失败');
+      tok=d.token;
+    }
+    const vr=await fetch('/api/admin/session',{headers:{'X-Admin-Token':tok}});
+    const vd=await vr.json().catch(()=>({}));
+    if(!vd.valid) throw new Error('凭据无效');
+    adminToken=tok; sessionStorage.setItem('oc_admin_token',tok);
+    document.getElementById('adminPass').value='';
+    setAdminUI(true); closeAdmin(); msg.textContent=''; load();
+  }catch(err){
+    msg.className='msg err'; msg.textContent=err.message;
+  }finally{ btn.disabled=false; }
+});
+async function deleteTheme(b){
+  const id=b.dataset.id, name=b.dataset.name||'该主题';
+  if(!confirm(`确定要删除「${name}」吗？\n\n主题包、预览图与下载记录都会被永久移除，此操作不可撤销。`)) return;
+  b.disabled=true; b.textContent='删除中…';
+  try{
+    const r=await fetch('/api/themes/'+encodeURIComponent(id),{
+      method:'DELETE',headers:{'X-Admin-Token':adminToken}});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok){
+      if(r.status===401){
+        sessionStorage.removeItem('oc_admin_token'); adminToken=''; setAdminUI(false);
+        throw new Error('登录已过期，请重新登录');
+      }
+      throw new Error(d.detail||'HTTP '+r.status);
+    }
+    await loadCategories(); await load();
+  }catch(err){
+    alert('删除失败：'+err.message);
+    b.disabled=false; b.textContent='删除';
+  }
 }
 function renderCats(){
   const box=document.getElementById('cats');
@@ -299,6 +466,7 @@ document.getElementById('form').addEventListener('submit', async e=>{
   }finally{btn.disabled=false;}
 });
 setCategoryHint();
+initAdmin();
 loadCategories().then(load);
 </script>
 </body>
