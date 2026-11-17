@@ -693,6 +693,119 @@ def admin_session(request: Request):
     return {"valid": False}
 
 
+# ---------------------------------------------------------------------------
+# 应用内更新（App Updater）
+#
+# 两个更新通道：
+#   1) GitHub Release：App 直接请求 GitHub API（无需本服务参与）
+#   2) 自有服务器：GET /api/app/update 读 releases/app.json；
+#      POST /api/app/release 由管理员上传新版本 DMG 并原子更新 app.json
+# 发布产物与主题数据同盘存放（STORE_DATA/releases/），备份策略一致。
+# ---------------------------------------------------------------------------
+
+RELEASES_DIR = DATA / "releases"
+RELEASES_DIR.mkdir(parents=True, exist_ok=True)
+RELEASE_META = RELEASES_DIR / "app.json"
+UPDATE_MAX_MB = int(os.environ.get("UPDATE_MAX_MB", "200"))
+UPDATE_MAX_BYTES = UPDATE_MAX_MB * 1024 * 1024
+SEMVER_RE = re.compile(r"^\d+(\.\d+){0,3}$")
+
+
+def read_release_meta() -> dict:
+    if not RELEASE_META.exists():
+        return {}
+    try:
+        return json.loads(RELEASE_META.read_text(encoding="utf-8"))
+    except Exception:
+        return {}
+
+
+@app.get("/api/app/update")
+def app_update_check():
+    """App 启动/手动检查更新时调用：返回最新版本号、更新说明与下载地址。"""
+    meta = read_release_meta()
+    if not meta:
+        return {"hasUpdate": False, "channel": "server"}
+    return {
+        "hasUpdate": True,
+        "channel": "server",
+        "version": meta.get("version", ""),
+        "notes": meta.get("notes", ""),
+        "publishedAt": meta.get("publishedAt", ""),
+        "url": "/api/app/release/download",
+        "size": meta.get("size", 0),
+        "sha256": meta.get("sha256", ""),
+    }
+
+
+@app.get("/api/app/release/download")
+def app_release_download():
+    meta = read_release_meta()
+    fn = meta.get("file", "")
+    path = RELEASES_DIR / fn if fn else None
+    if not path or not path.exists():
+        raise HTTPException(status_code=404, detail="暂无发布包")
+    return FileResponse(path, filename=fn, media_type="application/octet-stream")
+
+
+@app.post("/api/app/release")
+async def app_release_upload(
+    request: Request,
+    version: str = Form(...),
+    notes: str = Form(""),
+    package: UploadFile = File(...),
+):
+    """管理员发布新版本：上传 DMG + 版本号 + 更新说明，原子替换 app.json。"""
+    if not admin_authorized(request):
+        raise HTTPException(status_code=401, detail="请先登录管理员账号")
+    v = (version or "").strip().lstrip("vV")
+    if not SEMVER_RE.match(v):
+        raise HTTPException(status_code=400, detail="版本号格式应为 x.y[.z[.w]]，例如 2.5.0")
+    fn = (package.filename or "").strip()
+    if not fn.lower().endswith(".dmg"):
+        raise HTTPException(status_code=400, detail="发布包必须是 .dmg 文件")
+    raw = await package.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="发布包为空")
+    if len(raw) > UPDATE_MAX_BYTES:
+        raise HTTPException(status_code=413, detail=f"发布包超过 {UPDATE_MAX_MB} MB 上限")
+
+    safe_name = f"OC.Theme.Studio-{v}.dmg"
+    tmp = RELEASES_DIR / (uuid.uuid4().hex + ".part")
+    try:
+        tmp.write_bytes(raw)
+        digest = hashlib.sha256(raw).hexdigest()
+        final = RELEASES_DIR / safe_name
+        tmp.replace(final)
+        # 清理旧版本包（保留最近 3 个）
+        olds = sorted(RELEASES_DIR.glob("OC.Theme.Studio-*.dmg"),
+                      key=lambda p: p.stat().st_mtime)
+        for p in olds[:-3]:
+            if p != final:
+                try:
+                    p.unlink()
+                except Exception:
+                    pass
+        meta = {
+            "version": v,
+            "notes": (notes or "").strip()[:2000],
+            "publishedAt": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
+            "file": safe_name,
+            "size": len(raw),
+            "sha256": digest,
+        }
+        tmp_meta = RELEASES_DIR / (uuid.uuid4().hex + ".json")
+        tmp_meta.write_text(json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
+        tmp_meta.replace(RELEASE_META)
+    finally:
+        try:
+            if tmp.exists():
+                tmp.unlink()
+        except Exception:
+            pass
+    return JSONResponse({"ok": True, **meta}, status_code=201)
+
+
 @app.get("/files/{tid}/{rest:path}")
 def serve_file(tid: str, rest: str):
     if not ID_RE.match(tid):
