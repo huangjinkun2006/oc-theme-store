@@ -49,11 +49,26 @@ OC Theme Studio · 主题商店后端（可自托管 / 可部署到任意 Python
     GET  /api/themes/{id}/download  下载主题包 zip
     POST /api/themes             上传主题（multipart，含 category）
     DELETE /api/themes/{id}      删除主题（需管理员登录会话或静态口令）
+    POST /api/themes/{id}/cover           自定义封面（管理员上传图片）
+    POST /api/themes/{id}/cover/generate  从主题包自动生成封面（管理员）
+    POST /api/themes/{id}/previews        追加预览图（管理员）
+    DELETE /api/themes/{id}/previews/{f}  删除预览图（管理员）
     GET  /files/{id}/{path}      预览图等静态文件
     GET  /api/admin/status       管理员登录是否启用
     POST /api/admin/login        账号密码登录，签发会话 token
     POST /api/admin/logout       注销会话
     GET  /api/admin/session      校验当前会话是否有效
+    POST /api/users/register     注册普通账号（用户名 + 密码，可选昵称），成功即签发会话
+    POST /api/users/login        普通账号登录
+    POST /api/users/logout       注销普通账号会话
+    GET  /api/users/session      校验普通账号会话
+    GET  /api/admin/check-user   查询当前登录用户是否为被授予的管理员
+    GET  /api/admin/users        管理员名单（仅超级管理员）
+    POST /api/admin/users/grant  授予某注册用户管理员权限（仅超级管理员）
+    POST /api/admin/users/revoke 撤销管理员权限（仅超级管理员）
+    GET  /api/themes/{id}/comments      评论列表（新在前）
+    POST /api/themes/{id}/comments      发表评论（需登录，X-User-Token）
+    DELETE /api/themes/{id}/comments/{cid}  删除评论（本人或管理员）
 
 数据存储：纯文件系统，无数据库依赖。每个主题一个目录：
     store_data/themes/<id>/meta.json + package.zip + previews/
@@ -70,6 +85,7 @@ import hmac
 import hashlib
 import secrets
 import shutil
+import struct
 import zipfile
 import mimetypes
 import threading
@@ -225,8 +241,29 @@ def list_meta() -> list:
 def to_public(meta: dict) -> dict:
     """内部元数据 -> 客户端 StoreTheme 需要的字段。"""
     cat = normalize_category(meta.get("category"))
+    tid = meta.get("id", "")
+    # 预览图 URL 列表（详情页轮播用）：自定义封面排最前，其余按文件名排序
+    previews = []
+    try:
+        pdir = theme_dir(tid) / "previews"
+        if pdir.is_dir():
+            files = [f for f in sorted(pdir.iterdir())
+                     if f.is_file()
+                     and f.suffix.lower() in (".png", ".jpg", ".jpeg", ".gif", ".webp")]
+            cover_name = str(meta.get("cover") or "")
+            if cover_name:
+                files = [f for f in files if f.name == cover_name] + \
+                        [f for f in files if f.name != cover_name]
+            previews = [f"/files/{tid}/previews/{f.name}" for f in files]
+    except Exception:
+        pass
+    thumbnail = meta.get("thumbnail", "")
+    if meta.get("cover"):
+        cover = f"/files/{tid}/previews/{meta['cover']}"
+        if cover in previews:
+            thumbnail = cover
     return {
-        "id": meta.get("id", ""),
+        "id": tid,
         "name": meta.get("name", ""),
         "author": meta.get("author", ""),
         "description": meta.get("description", ""),
@@ -234,12 +271,15 @@ def to_public(meta: dict) -> dict:
         "tags": meta.get("tags", []),
         "category": cat,
         "categoryLabel": CATEGORY_LABELS[cat],
-        "thumbnail": meta.get("thumbnail", ""),
-        "download": f"/api/themes/{meta.get('id','')}/download",
-        "previewCount": meta.get("previewCount", 0),
+        "thumbnail": thumbnail,
+        "previews": previews,
+        "cover": meta.get("cover", ""),
+        "download": f"/api/themes/{tid}/download",
+        "previewCount": len(previews) or meta.get("previewCount", 0),
         "sizeText": meta.get("sizeText", ""),
         "updated": meta.get("updated", ""),
         "downloads": meta.get("downloads", 0),
+        "commentCount": len(read_comments(tid)),
     }
 
 
@@ -251,8 +291,102 @@ def safe_filename(name: str) -> str:
     return SAFE_NAME_RE.sub("_", Path(name or "theme").name)[:80]
 
 
-def extract_preview_from_zip(zf: zipfile.ZipFile, dest: Path, tid: str) -> Optional[str]:
-    """取压缩包里第一张背景/图片作为预览图。"""
+def _icns_png_bytes(data: bytes) -> Optional[bytes]:
+    """从 .icns 容器里取出最大的内嵌 PNG 块（ic07/ic08/ic09/ic10/ic13/ic14）。"""
+    if len(data) < 16 or data[:4] != b"icns":
+        return None
+    best = None
+    i = 8
+    total = min(len(data), struct.unpack(">I", data[4:8])[0] if len(data) >= 8 else len(data))
+    while i + 8 <= total:
+        typ = data[i:i+4]
+        n = struct.unpack(">I", data[i+4:i+8])[0]
+        if n < 8 or i + n > total:
+            break
+        body = data[i+8:i+n]
+        if body[:8] == b"\x89PNG\r\n\x1a\n" and typ in (
+                b"ic07", b"ic08", b"ic09", b"ic10", b"ic13", b"ic14"):
+            if best is None or len(body) > len(best):
+                best = body
+        i += n
+    return best
+
+
+def build_icon_preview(zf: zipfile.ZipFile, dest: Path, tid: str,
+                       out_stem: str = "0") -> Optional[str]:
+    """纯图标包（无 PNG/JPG 预览）兜底：从若干 .icns 提取 PNG 拼成一张预览网格。
+
+    out_stem 默认 "0"（上传时的首张预览）；生成封面时传 "cover"。"""
+    try:
+        from PIL import Image, ImageDraw
+    except Exception:
+        return None
+    icns = [n for n in zf.namelist()
+            if n.lower().endswith(".icns") and "__MACOSX" not in n
+            and not n.startswith(".")]
+    if not icns:
+        return None
+    # 优先挑有辨识度的立体/彩色系统图标；箭头、圆点、光标、焦点框等纯 UI 小图标排最后
+    prefer = ["Apple", "HardDrive", "Windows", "AppleTM", "ExtHardDrive",
+              "AppleRecv", "shell", "tool", "ShutDown", "Lock", "Restart", "SetDefault",
+              "BtnFocus", "Cursor", "Dot", "Enter", "Left", "Right", "Selected",
+              "Selector", "Password"]
+    ui_small = {"btnfocus", "cursor", "dot", "enter", "left", "right", "selected",
+                "selector", "password"}
+    ranked = []
+    for key in prefer:
+        for n in icns:
+            if Path(n).stem.lower() == key.lower() and n not in ranked:
+                ranked.append(n)
+    # 兜底：未在偏好表里的，主图标（非 UI 小图标）优先
+    for n in icns:
+        if n not in ranked and Path(n).stem.lower() not in ui_small:
+            ranked.append(n)
+    for n in icns:
+        if n not in ranked:
+            ranked.append(n)
+    picks = ranked[:8]
+
+    W, H = 1280, 800
+    sheet = Image.new("RGB", (W, H), (13, 20, 34))
+    d = ImageDraw.Draw(sheet)
+    for y in range(H):
+        t = y / H
+        d.line([(0, y), (W, y)], fill=(int(16-6*t), int(24-9*t), int(40-14*t)))
+    thumb_tiles = []
+    for n in picks:
+        try:
+            raw = _icns_png_bytes(zf.read(n))
+            if not raw:
+                continue
+            import io
+            im = Image.open(io.BytesIO(raw)).convert("RGBA")
+            im.thumbnail((128, 128), Image.LANCZOS)
+            thumb_tiles.append(im)
+        except Exception:
+            continue
+    if not thumb_tiles:
+        return None
+    cols, cell = 4, 200
+    gx = (W - cols * cell) // 2
+    gy = 250
+    for i, im in enumerate(thumb_tiles[:8]):
+        r, c = divmod(i, cols)
+        cx = gx + c * cell + cell // 2
+        cy = gy + r * cell + cell // 2
+        d.rounded_rectangle([cx-84, cy-84, cx+84, cy+84], radius=18,
+                            fill=(30, 42, 60), outline=(55, 74, 102), width=2)
+        sheet.paste(im, (cx - im.width//2, cy - im.height//2), im)
+    dest_dir = dest / "previews"
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    out = dest_dir / f"{out_stem}.png"
+    sheet.save(out, "PNG")
+    return f"/files/{tid}/previews/{out.name}"
+
+
+def extract_preview_from_zip(zf: zipfile.ZipFile, dest: Path, tid: str,
+                             out_stem: str = "0") -> Optional[str]:
+    """取压缩包里第一张背景/图片作为预览图。out_stem 同上。"""
     names = [n for n in zf.namelist()
              if n.lower().endswith((".png", ".jpg", ".jpeg", ".webp"))
              and "/__MACOSX/" not in n and not n.startswith("__MACOSX")
@@ -267,7 +401,7 @@ def extract_preview_from_zip(zf: zipfile.ZipFile, dest: Path, tid: str) -> Optio
     ext = Path(name).suffix.lower()
     if ext not in (".png", ".jpg", ".jpeg", ".webp"):
         ext = ".png"
-    out_name = "0" + ext
+    out_name = out_stem + ext
     try:
         with zf.open(name) as src, open(dest_dir / out_name, "wb") as out:
             shutil.copyfileobj(src, out)
@@ -307,6 +441,9 @@ def add_theme_from_zip(path: Path, *, name: str, author: str,
         try:
             with zipfile.ZipFile(path) as zf:
                 thumbnail = extract_preview_from_zip(zf, d, tid)
+                if not thumbnail:
+                    # 纯图标包：从 .icns 拼一张预览
+                    thumbnail = build_icon_preview(zf, d, tid)
                 if thumbnail:
                     preview_count = max(preview_count, 1)
         except Exception:
@@ -413,12 +550,32 @@ def admin_token_from(request: Request) -> str:
     return ""
 
 
+def user_is_admin(key: str) -> bool:
+    """被授予管理员权限的注册用户；每次动态查表，授权/撤销立即生效。"""
+    with _USERS_LOCK:
+        rec = load_users().get(key) or {}
+    return bool(rec.get("admin"))
+
+
 def admin_authorized(request: Request) -> bool:
-    """登录会话 token 与旧的静态口令，任一通过即视为管理员。"""
+    """管理员判定：超级管理员会话 / 旧静态口令 / 被授予管理员权限的普通用户会话。"""
+    tok = admin_token_from(request)
+    if tok:
+        if session_user(tok) is not None:
+            return True
+        if ADMIN_TOKEN and hmac.compare_digest(tok, ADMIN_TOKEN):
+            return True
+    urec = user_session(user_token_from(request))
+    return bool(urec and user_is_admin(urec["key"]))
+
+
+def super_authorized(request: Request) -> bool:
+    """超级管理员判定：环境变量配置的账号会话或旧静态口令。
+    授予/撤销管理员只认超级管理员，被授予者不能继续授权（防提权）。"""
     tok = admin_token_from(request)
     if not tok:
         return False
-    if session_user(tok) is not None:
+    if session_user(tok) == ADMIN_USER:
         return True
     return bool(ADMIN_TOKEN) and hmac.compare_digest(tok, ADMIN_TOKEN)
 
@@ -458,6 +615,157 @@ def note_fail(ip: str) -> int:
 def clear_fails(ip: str):
     with _ADMIN_LOCK:
         _FAILS.pop(ip, None)
+
+
+# ---------------------------------------------------------------------------
+# 普通用户账号（注册 / 登录 / 评论）
+#
+# 与管理员体系完全分离：独立的用户表（users.json，用户名小写为键）、
+# 独立的会话表与失败限速。密码只存 sha256$salt$hash，明文不落盘。
+# 评论按主题存 comments.json，删除权限为「本人或管理员」。
+# ---------------------------------------------------------------------------
+USERS_FILE = DATA / "users.json"
+_USERS_LOCK = threading.Lock()
+_USER_SESSIONS: dict = {}       # token -> {"exp": float, "user": str, "key": str}
+USER_SESSION_HOURS = max(1, int(os.environ.get("STORE_USER_SESSION_HOURS", "72")))
+USER_MAX_FAILS = max(1, int(os.environ.get("STORE_USER_MAX_FAILS", "8")))
+USER_LOCK_SECONDS = max(1, int(os.environ.get("STORE_USER_LOCK_SECONDS", "60")))
+# 用户名：中英文数字下划线，2-20 字；密码 6-64 位
+USER_NAME_RE = re.compile(r"^[A-Za-z0-9_一-龥]{2,20}$")
+USER_FAILS: dict = {}
+REG_PER_HOUR = max(1, int(os.environ.get("STORE_REG_PER_HOUR", "5")))
+_REG_LOG: dict = {}             # ip -> [timestamp, ...]
+
+
+def load_users() -> dict:
+    if not USERS_FILE.exists():
+        return {}
+    try:
+        d = json.loads(USERS_FILE.read_text(encoding="utf-8"))
+        return d if isinstance(d, dict) else {}
+    except Exception:
+        return {}
+
+
+def save_users(users: dict):
+    tmp = DATA / ("users_" + uuid.uuid4().hex[:8] + ".tmp")
+    tmp.write_text(json.dumps(users, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(USERS_FILE)
+
+
+def hash_password(pwd: str, salt: Optional[str] = None) -> str:
+    salt = salt or secrets.token_hex(8)
+    h = hashlib.sha256((salt + pwd).encode("utf-8")).hexdigest()
+    return f"sha256${salt}${h}"
+
+
+def verify_password(pwd: str, stored: str) -> bool:
+    parts = (stored or "").split("$")
+    if len(parts) != 3 or parts[0] != "sha256":
+        return False
+    h = hashlib.sha256((parts[1] + (pwd or "")).encode("utf-8")).hexdigest()
+    return hmac.compare_digest(h, parts[2])
+
+
+def new_user_session(display: str, key: str, login: str):
+    tok = secrets.token_urlsafe(32)
+    exp = time.time() + USER_SESSION_HOURS * 3600
+    with _USERS_LOCK:
+        now = time.time()
+        for k in [k for k, v in _USER_SESSIONS.items() if v["exp"] <= now]:
+            _USER_SESSIONS.pop(k, None)
+        _USER_SESSIONS[tok] = {"exp": exp, "user": display, "key": key, "login": login}
+    return tok, exp
+
+
+def user_session(tok: str) -> Optional[dict]:
+    if not tok:
+        return None
+    with _USERS_LOCK:
+        rec = _USER_SESSIONS.get(tok)
+        if not rec:
+            return None
+        if rec["exp"] <= time.time():
+            _USER_SESSIONS.pop(tok, None)
+            return None
+        return rec
+
+
+def drop_user_session(tok: str):
+    with _USERS_LOCK:
+        _USER_SESSIONS.pop(tok, None)
+
+
+def user_token_from(request: Request) -> str:
+    return request.headers.get("x-user-token", "").strip()
+
+
+def user_locked_seconds(ip: str) -> int:
+    with _USERS_LOCK:
+        st = USER_FAILS.get(ip)
+        if not st:
+            return 0
+        now = time.time()
+        left = st["until"] - now
+        if left > 0:
+            return int(left) + 1
+        if st["until"] > 0 or now - st.get("last", 0) > USER_LOCK_SECONDS:
+            USER_FAILS.pop(ip, None)
+        return 0
+
+
+def user_note_fail(ip: str) -> int:
+    with _USERS_LOCK:
+        st = USER_FAILS.get(ip, {"count": 0, "until": 0.0, "last": 0.0})
+        st["count"] += 1
+        st["last"] = time.time()
+        if st["count"] >= USER_MAX_FAILS:
+            st["until"] = time.time() + USER_LOCK_SECONDS
+            st["count"] = 0
+            USER_FAILS[ip] = st
+            return USER_LOCK_SECONDS
+        USER_FAILS[ip] = st
+        return 0
+
+
+def user_clear_fails(ip: str):
+    with _USERS_LOCK:
+        USER_FAILS.pop(ip, None)
+
+
+def reg_allowed(ip: str) -> bool:
+    """每 IP 每小时限注册 N 个，防批量刷号。"""
+    now = time.time()
+    with _USERS_LOCK:
+        log = [t for t in _REG_LOG.get(ip, []) if now - t < 3600]
+        _REG_LOG[ip] = log
+        return len(log) < REG_PER_HOUR
+
+
+def reg_note(ip: str):
+    with _USERS_LOCK:
+        _REG_LOG.setdefault(ip, []).append(time.time())
+
+
+def comments_path(tid: str) -> Path:
+    return theme_dir(tid) / "comments.json"
+
+
+def read_comments(tid: str) -> list:
+    p = comments_path(tid)
+    if not p.exists():
+        return []
+    try:
+        d = json.loads(p.read_text(encoding="utf-8"))
+        return d if isinstance(d, list) else []
+    except Exception:
+        return []
+
+
+def write_comments(tid: str, items: list):
+    tmp = theme_dir(tid) / ("comments_" + uuid.uuid4().hex[:8] + ".tmp")
+    tmp.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(comments_path(tid))
 
 
 # ---------------------------------------------------------------------------
@@ -635,6 +943,142 @@ def delete_theme(tid: str, request: Request):
     return {"ok": True}
 
 
+# ---------------------------------------------------------------------------
+# 封面 / 预览图管理（管理员）
+# ---------------------------------------------------------------------------
+PREVIEW_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
+PREVIEW_MAX_BYTES = 8 * 1024 * 1024
+
+
+def _require_theme(tid: str) -> dict:
+    if not ID_RE.match(tid):
+        raise HTTPException(status_code=400, detail="非法 id")
+    m = read_meta(tid)
+    if m is None:
+        raise HTTPException(status_code=404, detail="主题不存在")
+    return m
+
+
+def _save_meta(tid: str, m: dict):
+    m["updated"] = now_iso()
+    meta_path(tid).write_text(json.dumps(m, ensure_ascii=False, indent=2),
+                              encoding="utf-8")
+
+
+async def _read_preview_upload(f: Optional[UploadFile]) -> tuple:
+    """校验并读取上传的图片：返回 (bytes, ext)。"""
+    if not f or not f.filename:
+        raise HTTPException(status_code=400, detail="请选择图片文件")
+    ext = Path(f.filename).suffix.lower()
+    if ext not in PREVIEW_EXTS:
+        raise HTTPException(status_code=400,
+                            detail="图片格式必须是 " + " / ".join(PREVIEW_EXTS))
+    b = await f.read()
+    if not b:
+        raise HTTPException(status_code=400, detail="图片为空")
+    if len(b) > PREVIEW_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="图片超过 8 MB 上限")
+    return b, ext
+
+
+@app.post("/api/themes/{tid}/cover")
+async def set_cover(tid: str, request: Request, file: UploadFile = File(...)):
+    """自定义封面：管理员上传一张图片，作为卡片缩略图与详情页首图。"""
+    if not admin_authorized(request):
+        raise HTTPException(status_code=401, detail="请先登录管理员账号")
+    m = _require_theme(tid)
+    data, ext = await _read_preview_upload(file)
+    pdir = theme_dir(tid) / "previews"
+    pdir.mkdir(parents=True, exist_ok=True)
+    # 清掉旧封面（cover.* 可能是任意受支持格式）
+    for old in pdir.glob("cover.*"):
+        try:
+            old.unlink()
+        except Exception:
+            pass
+    fname = "cover" + ext
+    (pdir / fname).write_bytes(data)
+    m["cover"] = fname
+    m["thumbnail"] = f"/files/{tid}/previews/{fname}"
+    _save_meta(tid, m)
+    return JSONResponse(to_public(m))
+
+
+@app.post("/api/themes/{tid}/cover/generate")
+def generate_cover(tid: str, request: Request):
+    """自动从主题包生成封面：优先取包内背景图，纯图标包则拼图标网格。"""
+    if not admin_authorized(request):
+        raise HTTPException(status_code=401, detail="请先登录管理员账号")
+    m = _require_theme(tid)
+    pkg = theme_dir(tid) / "package.zip"
+    if not pkg.exists():
+        raise HTTPException(status_code=404, detail="主题包文件缺失，无法生成封面")
+    pdir = theme_dir(tid) / "previews"
+    pdir.mkdir(parents=True, exist_ok=True)
+    for old in pdir.glob("cover.*"):
+        try:
+            old.unlink()
+        except Exception:
+            pass
+    url = None
+    try:
+        with zipfile.ZipFile(pkg) as zf:
+            url = extract_preview_from_zip(zf, theme_dir(tid), tid, out_stem="cover")
+            if not url:
+                url = build_icon_preview(zf, theme_dir(tid), tid, out_stem="cover")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"生成封面失败：{e}")
+    if not url:
+        raise HTTPException(status_code=422,
+                            detail="包内没有可用的图片资源，无法自动生成封面，请手动上传")
+    m["cover"] = "cover" + Path(url).suffix.lower()
+    m["thumbnail"] = url
+    _save_meta(tid, m)
+    return JSONResponse(to_public(m))
+
+
+@app.post("/api/themes/{tid}/previews")
+async def add_preview(tid: str, request: Request, file: UploadFile = File(...)):
+    """追加一张预览图（详情页轮播可翻页）。"""
+    if not admin_authorized(request):
+        raise HTTPException(status_code=401, detail="请先登录管理员账号")
+    m = _require_theme(tid)
+    data, ext = await _read_preview_upload(file)
+    pdir = theme_dir(tid) / "previews"
+    pdir.mkdir(parents=True, exist_ok=True)
+    fname = f"u_{int(time.time())}_{uuid.uuid4().hex[:6]}{ext}"
+    (pdir / fname).write_bytes(data)
+    if not m.get("thumbnail"):
+        m["thumbnail"] = f"/files/{tid}/previews/{fname}"
+    _save_meta(tid, m)
+    return JSONResponse(to_public(m))
+
+
+@app.delete("/api/themes/{tid}/previews/{fname}")
+def delete_preview(tid: str, fname: str, request: Request):
+    """删除一张预览图；若删的是封面则回退到剩余第一张。"""
+    if not admin_authorized(request):
+        raise HTTPException(status_code=401, detail="请先登录管理员账号")
+    m = _require_theme(tid)
+    if "/" in fname or "\\" in fname or ".." in fname:
+        raise HTTPException(status_code=400, detail="非法文件名")
+    target = theme_dir(tid) / "previews" / fname
+    if not target.exists() or not target.is_file():
+        raise HTTPException(status_code=404, detail="预览图不存在")
+    target.unlink()
+    was_cover = m.get("cover") == fname
+    if was_cover:
+        m.pop("cover", None)
+    pdir = theme_dir(tid) / "previews"
+    rest = sorted(f for f in pdir.iterdir()
+                  if f.is_file() and f.suffix.lower() in PREVIEW_EXTS)
+    if was_cover or not m.get("thumbnail"):
+        m["thumbnail"] = (f"/files/{tid}/previews/{rest[0].name}"
+                          if rest else "")
+    _save_meta(tid, m)
+    return JSONResponse(to_public(m))
+
+
 @app.get("/api/admin/status")
 def admin_status():
     """给网页用：是否启用了管理员登录（不泄露账号/口令本身）。"""
@@ -691,6 +1135,250 @@ def admin_session(request: Request):
     if ADMIN_TOKEN and tok and hmac.compare_digest(tok, ADMIN_TOKEN):
         return {"valid": True, "user": ADMIN_USER, "static": True}
     return {"valid": False}
+
+
+# ---------------------------------------------------------------------------
+# 普通用户：注册 / 登录 / 会话
+# ---------------------------------------------------------------------------
+@app.post("/api/users/register")
+async def user_register(request: Request):
+    """注册普通账号：用户名 + 密码，成功即登录并签发会话 token。"""
+    ip = client_ip(request)
+    if not reg_allowed(ip):
+        raise HTTPException(status_code=429, detail="本网络注册过于频繁，请 1 小时后再试")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="请求格式错误")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="请求格式错误")
+    name = str(body.get("username") or "").strip()
+    pwd = str(body.get("password") or "")
+    nick = str(body.get("nickname") or "").strip()
+    if not USER_NAME_RE.match(name):
+        raise HTTPException(status_code=400,
+                            detail="用户名需为 2-20 位中文、字母、数字或下划线")
+    if len(pwd) < 6 or len(pwd) > 64:
+        raise HTTPException(status_code=400, detail="密码需为 6-64 位")
+    if len(nick) > 24:
+        raise HTTPException(status_code=400, detail="昵称不能超过 24 字")
+    display = nick or name
+    key = name.lower()
+    with _USERS_LOCK:
+        users = load_users()
+        if key in users:
+            raise HTTPException(status_code=409, detail="该用户名已被注册")
+        users[key] = {
+            "name": name,
+            "nick": nick,
+            "pwd": hash_password(pwd),
+            "created": now_iso(),
+        }
+        save_users(users)
+    reg_note(ip)
+    tok, exp = new_user_session(display, key, name)
+    return {"ok": True, "token": tok, "user": display, "login": name,
+            "expiresAt": exp, "sessionHours": USER_SESSION_HOURS}
+
+
+@app.post("/api/users/login")
+async def user_login(request: Request):
+    ip = client_ip(request)
+    wait = user_locked_seconds(ip)
+    if wait:
+        raise HTTPException(status_code=429, detail=f"尝试过于频繁，请 {wait} 秒后再试")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="请求格式错误")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="请求格式错误")
+    name = str(body.get("username") or "").strip()
+    pwd = str(body.get("password") or "")
+    key = name.lower()
+    with _USERS_LOCK:
+        users = load_users()
+        rec = users.get(key)
+    ok = bool(rec) and verify_password(pwd, rec.get("pwd", ""))
+    if not ok:
+        lock = user_note_fail(ip)
+        if lock:
+            raise HTTPException(status_code=429, detail=f"密码错误次数过多，请 {lock} 秒后再试")
+        raise HTTPException(status_code=401, detail="用户名或密码不正确")
+    user_clear_fails(ip)
+    tok, exp = new_user_session(rec.get("nick") or rec["name"], key, rec["name"])
+    return {"ok": True, "token": tok, "user": rec.get("nick") or rec["name"],
+            "login": rec["name"],
+            "expiresAt": exp, "sessionHours": USER_SESSION_HOURS}
+
+
+@app.post("/api/users/logout")
+def user_logout(request: Request):
+    tok = user_token_from(request)
+    if tok:
+        drop_user_session(tok)
+    return {"ok": True}
+
+
+@app.get("/api/users/session")
+def user_session_check(request: Request):
+    rec = user_session(user_token_from(request))
+    if rec:
+        return {"valid": True, "user": rec["user"], "login": rec.get("login", ""),
+                "isAdmin": user_is_admin(rec["key"])}
+    return {"valid": False}
+
+
+# ---------------------------------------------------------------------------
+# 管理员授权：超级管理员把已注册用户提升 / 降为管理员
+# ---------------------------------------------------------------------------
+@app.get("/api/admin/check-user")
+def check_user_admin(request: Request):
+    """查询当前登录的普通用户是否已被授予管理员（前端据此显示管理入口）。"""
+    rec = user_session(user_token_from(request))
+    if rec and user_is_admin(rec["key"]):
+        return {"isAdmin": True, "user": rec["user"], "login": rec.get("login", "")}
+    return {"isAdmin": False}
+
+
+@app.get("/api/admin/users")
+def list_admin_users(request: Request):
+    """全部注册用户及其管理员标志（仅超级管理员可查）。"""
+    if not super_authorized(request):
+        raise HTTPException(status_code=403, detail="需要超级管理员权限")
+    with _USERS_LOCK:
+        users = load_users()
+    return [{"login": u.get("name", k), "nick": u.get("nick", ""),
+             "created": u.get("created", ""), "isAdmin": bool(u.get("admin"))}
+            for k, u in sorted(users.items())]
+
+
+@app.post("/api/admin/users/grant")
+async def grant_admin(request: Request):
+    """授予某注册用户管理员权限（仅超级管理员）。"""
+    if not super_authorized(request):
+        raise HTTPException(status_code=403, detail="需要超级管理员权限")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="请求格式错误")
+    key = str((body or {}).get("username") or "").strip().lower()
+    if not key:
+        raise HTTPException(status_code=400, detail="请提供用户名")
+    with _USERS_LOCK:
+        users = load_users()
+        rec = users.get(key)
+        if rec is None:
+            raise HTTPException(status_code=404, detail="用户不存在，请让其先注册")
+        if rec.get("admin"):
+            return {"ok": True, "login": rec["name"], "isAdmin": True, "changed": False}
+        rec["admin"] = True
+        save_users(users)
+    return {"ok": True, "login": rec["name"], "isAdmin": True, "changed": True}
+
+
+@app.post("/api/admin/users/revoke")
+async def revoke_admin(request: Request):
+    """撤销管理员权限（仅超级管理员）。"""
+    if not super_authorized(request):
+        raise HTTPException(status_code=403, detail="需要超级管理员权限")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="请求格式错误")
+    key = str((body or {}).get("username") or "").strip().lower()
+    if not key:
+        raise HTTPException(status_code=400, detail="请提供用户名")
+    with _USERS_LOCK:
+        users = load_users()
+        rec = users.get(key)
+        if rec is None:
+            raise HTTPException(status_code=404, detail="用户不存在")
+        if not rec.get("admin"):
+            return {"ok": True, "login": rec["name"], "isAdmin": False, "changed": False}
+        rec["admin"] = False
+        save_users(users)
+    return {"ok": True, "login": rec["name"], "isAdmin": False, "changed": True}
+
+
+# ---------------------------------------------------------------------------
+# 评论
+# ---------------------------------------------------------------------------
+COMMENT_MAX = 500
+COMMENT_PER_MIN = max(1, int(os.environ.get("STORE_COMMENT_PER_MIN", "5")))
+_COMMENT_LOG: dict = {}
+
+
+def comment_allowed(key: str) -> bool:
+    now = time.time()
+    with _USERS_LOCK:
+        log = [t for t in _COMMENT_LOG.get(key, []) if now - t < 60]
+        _COMMENT_LOG[key] = log
+        return len(log) < COMMENT_PER_MIN
+
+
+@app.get("/api/themes/{tid}/comments")
+def get_comments(tid: str):
+    if not ID_RE.match(tid) or not theme_dir(tid).exists():
+        raise HTTPException(status_code=404, detail="主题不存在")
+    items = read_comments(tid)
+    items.sort(key=lambda c: c.get("ts", 0), reverse=True)
+    return [{"id": c.get("id"), "user": c.get("user"), "text": c.get("text"),
+             "time": c.get("time"), "ts": c.get("ts", 0)} for c in items]
+
+
+@app.post("/api/themes/{tid}/comments")
+async def post_comment(tid: str, request: Request):
+    if not ID_RE.match(tid) or not theme_dir(tid).exists():
+        raise HTTPException(status_code=404, detail="主题不存在")
+    rec = user_session(user_token_from(request))
+    if not rec:
+        raise HTTPException(status_code=401, detail="请先注册或登录后评论")
+    if not comment_allowed(rec["key"]):
+        raise HTTPException(status_code=429, detail="评论太快了，请稍后再发")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="请求格式错误")
+    text = str((body or {}).get("text") or "").strip()
+    if not text:
+        raise HTTPException(status_code=400, detail="评论内容不能为空")
+    if len(text) > COMMENT_MAX:
+        raise HTTPException(status_code=400, detail=f"评论不能超过 {COMMENT_MAX} 字")
+    with _USERS_LOCK:
+        _COMMENT_LOG.setdefault(rec["key"], []).append(time.time())
+    item = {
+        "id": "c_" + uuid.uuid4().hex[:10],
+        "user": rec["user"],
+        "key": rec["key"],
+        "text": text,
+        "time": now_iso(),
+        "ts": int(time.time()),
+    }
+    items = read_comments(tid)
+    items.append(item)
+    write_comments(tid, items)
+    return JSONResponse({"ok": True, **{k: item[k] for k in
+                        ("id", "user", "text", "time", "ts")}}, status_code=201)
+
+
+@app.delete("/api/themes/{tid}/comments/{cid}")
+def delete_comment(tid: str, cid: str, request: Request):
+    if not ID_RE.match(tid) or not theme_dir(tid).exists():
+        raise HTTPException(status_code=404, detail="主题不存在")
+    urec = user_session(user_token_from(request))
+    is_admin = admin_authorized(request)
+    if not urec and not is_admin:
+        raise HTTPException(status_code=401, detail="请先登录")
+    items = read_comments(tid)
+    target = next((c for c in items if c.get("id") == cid), None)
+    if target is None:
+        raise HTTPException(status_code=404, detail="评论不存在")
+    if not is_admin and target.get("key") != urec["key"]:
+        raise HTTPException(status_code=403, detail="只能删除自己的评论")
+    items = [c for c in items if c.get("id") != cid]
+    write_comments(tid, items)
+    return {"ok": True}
 
 
 # ---------------------------------------------------------------------------

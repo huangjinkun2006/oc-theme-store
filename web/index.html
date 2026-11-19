@@ -5,142 +5,259 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>OC Theme Studio · 主题商店</title>
 <style>
+
   :root{
-    --bg:#f5f6f8; --card:#fff; --line:#e3e6ec; --text:#1c2330;
-    --muted:#6b7482; --accent:#2f6bff; --accent-soft:#eaf0ff;
-    --ok:#1a9c62; --err:#d64545; --shadow:0 1px 3px rgba(20,30,55,.07),0 8px 24px rgba(20,30,55,.05);
+    --bg:#f4f6fa; --surface:#ffffff; --surface2:#f7f9fc;
+    --line:#e3e8ef; --line2:#d4dbe5;
+    --text:#1b2430; --muted:#798595;
+    --accent:#2563eb; --accent-soft:#eaf1ff; --accent-dark:#1d4ed8;
+    --red:#d64545; --green:#1f9d63;
+    --shadow:0 1px 2px rgba(22,35,60,.05),0 6px 18px rgba(22,35,60,.04);
+    --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,"Liberation Mono",monospace;
   }
   *{box-sizing:border-box}
   body{margin:0;background:var(--bg);color:var(--text);
     font:14px/1.6 -apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif}
   a{color:var(--accent);text-decoration:none}
-  .wrap{max-width:1120px;margin:0 auto;padding:0 22px 60px}
-  header{background:linear-gradient(135deg,#1b2740,#2f6bff);color:#fff;padding:34px 0 30px;margin-bottom:26px}
-  header .wrap{padding-bottom:0}
-  .head-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap}
-  h1{margin:0 0 6px;font-size:24px;letter-spacing:.3px}
-  .sub{opacity:.82;font-size:13px}
-  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:20px;
-    background:rgba(255,255,255,.13);border:1px solid rgba(255,255,255,.2);
-    border-radius:10px;padding:10px 12px}
-  .bar code{flex:1;min-width:220px;font-size:12.5px;word-break:break-all;color:#fff}
-  .bar button{background:#fff;color:#20459c;border:0;border-radius:7px;padding:7px 14px;
-    font-weight:600;cursor:pointer;font-size:12.5px}
-  .bar button:hover{background:#eaf0ff}
-  .cols{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:22px}
-  @media(max-width:860px){.cols{grid-template-columns:1fr}}
-  h2{font-size:15px;margin:0 0 14px;display:flex;align-items:center;gap:8px}
-  h2 .count{font-size:11px;font-weight:600;background:var(--accent-soft);color:var(--accent);
+  button,input,select,textarea{font:inherit}
+  .wrap{max-width:1200px;margin:0 auto;padding:0 24px 56px}
+
+  /* header */
+  header{background:var(--surface);border-bottom:1px solid var(--line)}
+  header .wrap{padding-top:26px;padding-bottom:22px}
+  .head-top{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  .brand{display:flex;align-items:center;gap:12px}
+  .brand .logo{width:42px;height:42px;border-radius:11px;background:var(--accent);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;letter-spacing:.5px}
+  h1{margin:0;font-size:20px;font-weight:700;letter-spacing:.2px}
+  .sub{color:var(--muted);font-size:12.5px;margin-top:3px}
+  .admin-btn{background:var(--surface);color:var(--muted);border:1px solid var(--line2);border-radius:9px;
+    padding:9px 15px;font-size:12.5px;font-weight:600;cursor:pointer;white-space:nowrap}
+  .admin-btn:hover{border-color:var(--accent);color:var(--accent)}
+  .admin-btn .dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:var(--green);margin-right:7px}
+  .head-actions{display:flex;gap:9px;align-items:center;flex-wrap:wrap}
+  .user-btn{background:var(--accent);color:#fff;border:1px solid var(--accent);border-radius:9px;
+    padding:9px 16px;font-size:13px;font-weight:650;cursor:pointer}
+  .user-btn:hover{background:var(--accent-dark)}
+  .user-btn.on{background:var(--surface);color:var(--text);border-color:var(--line2)}
+  .user-btn.on:hover{border-color:var(--accent);color:var(--accent)}
+  .auth-tabs{display:flex;gap:0;border:1px solid var(--line2);border-radius:9px;overflow:hidden;margin-bottom:16px}
+  .auth-tabs button{flex:1;border:0;background:var(--surface2);color:var(--muted);padding:10px;
+    font-size:13px;font-weight:650;cursor:pointer}
+  .auth-tabs button.on{background:var(--accent);color:#fff}
+  .bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-top:18px;
+    background:var(--surface2);border:1px solid var(--line);border-radius:10px;padding:9px 12px}
+  .bar .lbl{font-size:12px;color:var(--muted)}
+  .bar code{flex:1;min-width:220px;font:12px var(--mono);word-break:break-all;color:#33405a}
+  .bar button{background:var(--surface);color:var(--accent);border:1px solid var(--line2);border-radius:7px;
+    padding:6px 12px;cursor:pointer;font-size:12px;font-weight:600;white-space:nowrap}
+  .bar button:hover{border-color:var(--accent)}
+
+  /* layout */
+  .cols{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:24px;align-items:start}
+  @media(max-width:900px){.cols{grid-template-columns:1fr}}
+  section > h2{font-size:13px;margin:18px 0 13px;color:var(--text);font-weight:700;display:flex;align-items:center;gap:9px}
+  h2 .count{font:600 11px var(--mono);background:var(--accent-soft);color:var(--accent);
     border-radius:20px;padding:2px 9px}
-  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(228px,1fr));gap:16px}
-  .cats{display:flex;gap:7px;flex-wrap:wrap;margin:0 0 16px}
-  .cat{background:var(--card);border:1px solid var(--line);color:#48536a;border-radius:20px;
-    padding:6px 13px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
+
+  /* toolbar + search */
+  .toolbar{display:flex;gap:12px;align-items:center;margin:22px 0 0;flex-wrap:wrap}
+  .search{flex:1;min-width:220px;background:var(--surface);border:1px solid var(--line2);border-radius:10px;
+    padding:11px 14px;font-size:13px;color:var(--text);outline:none}
+  .search:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  .result-info{font-size:12px;color:var(--muted);white-space:nowrap}
+
+  /* categories */
+  .cats{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 0}
+  .cat{background:var(--surface);border:1px solid var(--line);color:#4d5a6b;border-radius:20px;
+    padding:7px 15px;font-size:12.5px;font-weight:600;cursor:pointer;transition:.15s}
   .cat:hover{border-color:var(--accent);color:var(--accent)}
   .cat.on{background:var(--accent);border-color:var(--accent);color:#fff}
-  .cat .n{font-size:10.5px;opacity:.75;margin-left:4px}
-  .card{background:var(--card);border:1px solid var(--line);border-radius:12px;overflow:hidden;
-    box-shadow:var(--shadow);display:flex;flex-direction:column}
-  .thumb{aspect-ratio:16/9;background:#10151f;display:flex;align-items:center;justify-content:center;
-    overflow:hidden;color:#5a6577;font-size:12px}
-  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
-  .body{padding:13px 14px 14px;display:flex;flex-direction:column;gap:7px;flex:1}
-  .name{font-weight:650;font-size:14px;line-height:1.35}
-  .meta{font-size:11.5px;color:var(--muted);display:flex;gap:8px;flex-wrap:wrap}
-  .desc{font-size:12px;color:#4a5464;flex:1;
-    display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+  .cat .n{font:600 10.5px var(--mono);opacity:.65;margin-left:6px}
+
+  /* theme grid */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(238px,1fr));gap:18px;margin-top:4px}
+  .card{background:var(--surface);border:1px solid var(--line);border-radius:13px;overflow:hidden;
+    display:flex;flex-direction:column;box-shadow:var(--shadow);transition:transform .18s,box-shadow .18s,border-color .18s}
+  .card:hover{transform:translateY(-3px);border-color:var(--line2);box-shadow:0 8px 26px rgba(22,35,60,.11)}
+  .thumb{aspect-ratio:16/10;background:#eef2f7;display:flex;align-items:center;justify-content:center;
+    overflow:hidden;color:#9aa6b6;font-size:12px;border-bottom:1px solid var(--line)}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s}
+  .card:hover .thumb img{transform:scale(1.04)}
+  .body{padding:14px 15px 15px;display:flex;flex-direction:column;gap:7px;flex:1}
+  .name{font-weight:700;font-size:14.5px;line-height:1.4;color:var(--text)}
+  .meta{font-size:11.5px;color:var(--muted);display:flex;gap:9px;flex-wrap:wrap;align-items:center}
+  .desc{font-size:12.5px;color:#5b6879;flex:1;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:36px}
   .tags{display:flex;gap:5px;flex-wrap:wrap}
-  .tag{font-size:10.5px;background:#f0f3f9;color:#55617a;border-radius:5px;padding:2px 7px}
+  .tag{font-size:10.5px;background:var(--surface2);color:#66738a;border:1px solid var(--line);
+    border-radius:5px;padding:2px 7px}
   .cat-badge{font-size:10.5px;background:var(--accent-soft);color:var(--accent);
-    border-radius:5px;padding:1px 7px;font-weight:650}
-  .row{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:4px}
-  .dl{background:var(--accent);color:#fff;border:0;border-radius:7px;padding:7px 13px;
-    font-size:12.5px;font-weight:600;cursor:pointer}
-  .dl:hover{filter:brightness(1.08)}
-  .panel{background:var(--card);border:1px solid var(--line);border-radius:12px;
-    padding:20px;box-shadow:var(--shadow);position:sticky;top:18px}
-  label{display:block;font-size:12px;font-weight:600;margin:13px 0 5px;color:#3a4454}
+    border-radius:5px;padding:2px 8px;font-weight:650}
+  .row{display:flex;align-items:center;gap:8px;margin-top:5px;padding-top:12px;border-top:1px solid var(--line)}
+  .row .meta{font-size:11.5px}
+  .dl{margin-left:auto;background:var(--accent);color:#fff;border-radius:8px;padding:8px 15px;
+    font-size:12px;font-weight:650;text-decoration:none;white-space:nowrap}
+  .dl:hover{background:var(--accent-dark);color:#fff}
+  .del{background:var(--surface);color:var(--red);border:1px solid #f0c9c9;border-radius:7px;
+    padding:6px 10px;font-size:11.5px;cursor:pointer;font-weight:600}
+  .del:hover{background:#fff2f2}
+
+  /* upload panel */
+  .panel{background:var(--surface);border:1px solid var(--line);border-radius:13px;padding:20px;
+    box-shadow:var(--shadow);position:sticky;top:16px}
+  .panel h2{font-size:14px;margin:0 0 14px;font-weight:700}
+  label{display:block;font-size:12px;font-weight:600;margin:14px 0 6px;color:#3c4859}
   label:first-of-type{margin-top:0}
-  input[type=text],textarea,select{width:100%;border:1px solid var(--line);border-radius:8px;
-    padding:9px 11px;font:inherit;font-size:13px;background:#fbfcfe;color:var(--text)}
-  input[type=text]:focus,textarea:focus,select:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
-  textarea{resize:vertical;min-height:70px}
-  .type-hint{font-size:11px;line-height:1.6;color:var(--muted);margin-top:6px}
+  input[type=text],textarea,select{width:100%;border:1px solid var(--line2);border-radius:8px;
+    padding:10px 12px;font-size:13px;background:var(--surface);color:var(--text);outline:none}
+  input[type=text]:focus,textarea:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  textarea{resize:vertical;min-height:74px}
+  .type-hint{font-size:11.5px;line-height:1.7;color:var(--muted);background:var(--surface2);
+    border-radius:8px;padding:9px 11px;margin-top:8px}
   .two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-  .file{border:1px dashed #c8d2e4;border-radius:8px;padding:11px;font-size:12px;
-    color:var(--muted);background:#fbfcfe;margin-top:5px}
-  .file input{display:block;width:100%;font-size:11.5px;margin-top:6px}
-  .submit{width:100%;margin-top:18px;background:var(--accent);color:#fff;border:0;
-    border-radius:8px;padding:11px;font-size:13.5px;font-weight:650;cursor:pointer}
-  .submit:hover{filter:brightness(1.08)}
+  .file{border:1px dashed var(--line2);border-radius:8px;padding:12px;font-size:12px;
+    color:var(--muted);background:var(--surface2);margin-top:6px}
+  .file input{display:block;width:100%;font-size:11.5px;margin-top:8px;color:var(--muted)}
+  .submit{width:100%;margin-top:18px;background:var(--accent);color:#fff;border:1px solid var(--accent);
+    border-radius:9px;padding:12px;font-size:13px;font-weight:700;cursor:pointer}
+  .submit:hover{background:var(--accent-dark)}
   .submit:disabled{opacity:.55;cursor:default}
-  .msg{margin-top:12px;font-size:12px;min-height:18px}
-  .msg.ok{color:var(--ok)} .msg.err{color:var(--err)}
-  .empty{background:var(--card);border:1px dashed var(--line);border-radius:12px;
-    padding:40px;text-align:center;color:var(--muted)}
-  .foot{margin-top:26px;font-size:11.5px;color:var(--muted);text-align:center;line-height:1.9}
-  .pill{display:inline-block;background:#fff2d8;color:#9a6a00;border-radius:6px;
-    padding:2px 8px;font-size:11px;margin-bottom:10px}
-  .notice{font-size:11px;line-height:1.7;color:var(--muted);background:#f7f9fc;
-    border:1px solid var(--line);border-radius:8px;padding:9px 10px;margin-bottom:12px}
+  .msg{margin-top:11px;font-size:12px;min-height:18px}
+  .msg.ok{color:var(--green)} .msg.err{color:var(--red)}
+  .pill{display:inline-block;background:var(--accent-soft);color:var(--accent);border-radius:6px;
+    padding:3px 9px;font-size:11px;font-weight:600;margin-bottom:12px}
+  .notice{font-size:11.5px;line-height:1.7;color:#6b7686;background:#fffaf0;
+    border:1px solid #f0e4c8;border-radius:8px;padding:10px 11px;margin-bottom:14px}
+  .empty{background:var(--surface);border:1px dashed var(--line2);border-radius:13px;
+    padding:48px 20px;text-align:center;color:var(--muted);font-size:13px}
+  .foot{margin-top:34px;padding-top:20px;border-top:1px solid var(--line);
+    font-size:11.5px;color:var(--muted);text-align:center;line-height:1.9}
   .beian{margin-top:8px}
   .beian a{color:var(--muted)}
   .beian .ba-icon{width:14px;height:14px;vertical-align:-2px;margin-right:5px}
   .beian .ghs{height:18px;width:auto;vertical-align:-4px;margin-right:5px}
-  .beian .sep{color:#c8cedb;margin:0 8px}
+  .beian .sep{color:#c8d0db;margin:0 8px}
   .beian a:hover{color:var(--accent)}
-  /* 管理员 */
-  .admin-btn{background:rgba(255,255,255,.16);color:#fff;border:1px solid rgba(255,255,255,.35);
-    border-radius:7px;padding:6px 13px;font:inherit;font-size:12px;font-weight:600;cursor:pointer}
-  .admin-btn:hover{background:rgba(255,255,255,.26)}
-  .admin-btn .dot{display:inline-block;width:7px;height:7px;border-radius:50%;
-    background:#4ade80;margin-right:6px;vertical-align:1px}
-  .del{background:#fff;color:var(--err);border:1px solid #f0c4c4;border-radius:7px;
-    padding:6px 11px;font-size:12px;font-weight:600;cursor:pointer}
-  .del:hover{background:#fff1f1;border-color:var(--err)}
-  .row .dl{margin-left:auto}
-  .modal-mask{position:fixed;inset:0;background:rgba(16,24,40,.5);display:none;
+
+
+  /* theme detail */
+  .detail-mask{position:fixed;inset:0;background:rgba(18,28,45,.55);display:none;
+    align-items:center;justify-content:center;z-index:55;padding:20px}
+  .detail-mask.show{display:flex}
+  .detail{background:var(--surface);border:1px solid var(--line);border-radius:16px;width:100%;
+    max-width:880px;max-height:92vh;overflow:hidden;display:grid;grid-template-columns:1.15fr 1fr;
+    box-shadow:0 24px 70px rgba(18,28,45,.3)}
+  @media(max-width:760px){.detail{grid-template-columns:1fr;max-height:94vh;overflow-y:auto}}
+  .detail-stage{background:#0f1623;position:relative;min-height:340px;display:flex;
+    align-items:center;justify-content:center;overflow:hidden}
+  .detail-stage img.gen{width:100%;height:100%;max-height:560px;object-fit:contain;display:none}
+  .detail-stage img.gen.on{display:block}
+  .detail-stage .nopic{color:#7d8b9d;font-size:13px}
+  .detail-nav{position:absolute;top:50%;transform:translateY(-50%);width:34px;height:34px;
+    border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(15,22,35,.6);
+    color:#fff;font-size:18px;line-height:1;cursor:pointer;display:none}
+  .detail-nav.on{display:block}
+  .detail-nav:hover{background:rgba(37,99,235,.85)}
+  .detail-nav.prev{left:12px} .detail-nav.next{right:12px}
+  .detail-dots{position:absolute;bottom:12px;left:0;right:0;display:flex;gap:6px;justify-content:center}
+  .detail-dots b{width:7px;height:7px;border-radius:50%;background:rgba(255,255,255,.4);cursor:pointer}
+  .detail-dots b.on{background:#fff}
+  /* 缩略图翻页条（超过 3 张时出现） */
+  .detail-thumbs{position:absolute;bottom:26px;left:0;right:0;display:flex;gap:6px;
+    justify-content:center;align-items:center;padding:0 44px}
+  .detail-thumbs .tp{width:22px;height:22px;border-radius:50%;border:1px solid rgba(255,255,255,.3);
+    background:rgba(15,22,35,.65);color:#fff;font-size:13px;line-height:1;cursor:pointer;flex:0 0 auto}
+  .detail-thumbs .tp:hover{background:rgba(37,99,235,.85)}
+  .detail-thumbs .timg{width:64px;height:40px;object-fit:cover;border-radius:5px;cursor:pointer;
+    border:2px solid transparent;background:#1b2430;flex:0 0 auto}
+  .detail-thumbs .timg.on{border-color:#fff}
+  /* 封面 / 预览图管理（管理员可见） */
+  .cover-tools{display:none;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+  .cover-tools.on{display:flex}
+  .cover-tools button{border:1px solid var(--line2);background:var(--surface2);color:#4d5a6b;
+    border-radius:7px;padding:6px 11px;font-size:12px;font-weight:600;cursor:pointer}
+  .cover-tools button:hover{border-color:var(--accent);color:var(--accent)}
+  .cover-tools .tip{font-size:11.5px;color:var(--muted);align-self:center}
+  .detail-info{padding:26px 26px 24px;overflow-y:auto;display:flex;flex-direction:column}
+  .detail-info .cat-badge{align-self:flex-start}
+  .detail-info h2{font-size:21px;margin:12px 0 4px;font-weight:700;line-height:1.3}
+  .detail-byline{font-size:12px;color:var(--muted);margin-bottom:16px}
+  .detail-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;
+    border:1px solid var(--line);border-radius:10px;padding:12px}
+  .detail-stats div{text-align:center}
+  .detail-stats .v{font-size:15px;font-weight:700;color:var(--text)}
+  .detail-stats .k{font-size:10.5px;color:var(--muted);margin-top:2px}
+  .detail-desc{font-size:13px;line-height:1.8;color:#4d5a6b;white-space:pre-wrap;
+    border-top:1px solid var(--line);padding-top:14px;margin-bottom:14px}
+  .detail-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
+  .detail-actions{display:flex;gap:10px;margin-top:auto;padding-top:14px;border-top:1px solid var(--line)}
+  .detail-actions .dl{margin-left:0;flex:1;text-align:center;font-size:13px;padding:12px}
+  /* 评论区 */
+  .comments{border-top:1px solid var(--line);padding-top:14px;margin-top:2px}
+  .comments h4{margin:0 0 10px;font-size:13px;font-weight:700;color:var(--text)}
+  .comments h4 span{color:var(--muted);font-weight:500}
+  .cmt-form{display:flex;gap:8px;margin-bottom:12px}
+  .cmt-form textarea{flex:1;border:1px solid var(--line2);border-radius:8px;padding:8px 10px;
+    font-size:12.5px;resize:none;height:58px;background:var(--surface);color:var(--text);outline:none;font-family:inherit}
+  .cmt-form textarea:focus{border-color:var(--accent)}
+  .cmt-form button{align-self:stretch;border:1px solid var(--accent);background:var(--accent);
+    color:#fff;border-radius:8px;padding:0 14px;font-size:12.5px;font-weight:650;cursor:pointer}
+  .cmt-form button:hover{background:var(--accent-dark)}
+  .cmt-login-hint{font-size:12px;color:var(--muted);background:var(--surface2);
+    border:1px dashed var(--line2);border-radius:8px;padding:9px 12px;margin-bottom:12px}
+  .cmt-login-hint a{color:var(--accent);cursor:pointer;font-weight:650}
+  .cmt-list{display:flex;flex-direction:column;gap:10px;max-height:220px;overflow-y:auto;padding-right:2px}
+  .cmt{border:1px solid var(--line);border-radius:9px;padding:9px 12px;background:var(--surface2)}
+  .cmt .hd{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .cmt .who{font-size:12px;font-weight:700;color:var(--accent)}
+  .cmt .tm{font-size:11px;color:var(--muted)}
+  .cmt .rm{margin-left:auto;border:0;background:none;color:var(--muted);font-size:11px;cursor:pointer;padding:2px 4px}
+  .cmt .rm:hover{color:var(--red)}
+  .cmt .tx{font-size:12.5px;line-height:1.7;color:#4d5a6b;white-space:pre-wrap;word-break:break-word}
+  .cmt-empty{font-size:12px;color:var(--muted);padding:6px 0}
+  .detail-close{position:absolute;top:12px;right:12px;z-index:3;width:32px;height:32px;
+    border-radius:50%;border:1px solid rgba(255,255,255,.25);background:rgba(15,22,35,.6);
+    color:#fff;font-size:18px;line-height:1;cursor:pointer}
+
+  /* modals */
+  .modal-mask{position:fixed;inset:0;background:rgba(18,28,45,.45);display:none;
     align-items:center;justify-content:center;z-index:50;padding:20px}
   .modal-mask.show{display:flex}
-  .modal{background:#fff;border-radius:14px;width:100%;max-width:360px;padding:24px;
-    box-shadow:0 20px 60px rgba(16,24,40,.3);max-height:92vh;overflow-y:auto}
-  .modal h3{margin:0 0 4px;font-size:17px}
-  .modal .hint{font-size:12px;color:var(--muted);margin:0 0 16px;line-height:1.6}
-  .modal input[type=password],.modal input[type=text],.modal textarea{width:100%;border:1px solid var(--line);border-radius:8px;
-    padding:9px 11px;font:inherit;font-size:13px;background:#fbfcfe;color:var(--text);margin-top:5px;box-sizing:border-box}
-  .modal input[type=password]:focus,.modal input[type=text]:focus,.modal textarea:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
-  .modal label{font-size:12px;font-weight:650;color:#48536a}
-  .modal input[type=file]{width:100%;color:var(--muted)}
-  .modal .actions{display:flex;gap:9px;margin-top:18px}
-  .modal .actions button{flex:1;border-radius:8px;padding:10px;font-size:13px;font-weight:650;cursor:pointer}
-  .btn-primary{background:var(--accent);color:#fff;border:0}
-  .btn-primary:hover{filter:brightness(1.08)}
-  .btn-ghost{background:#fff;color:#48536a;border:1px solid var(--line)}
-  .btn-ghost:hover{background:#f5f7fb}
-  .btn-logout{background:#fff;color:var(--err);border:1px solid #f0c4c4}
-  .btn-logout:hover{background:#fff1f1}
-  .modal .msg{margin-top:12px}
-  /* 删除二次确认：用页面内弹窗，不依赖浏览器原生 confirm（预览面板/WebView 会拦截） */
-  .confirm-mask{position:fixed;inset:0;background:rgba(16,24,40,.5);display:none;
+  .modal{background:var(--surface);border:1px solid var(--line);border-radius:15px;width:100%;
+    max-width:400px;padding:26px;max-height:92vh;overflow-y:auto;box-shadow:0 24px 60px rgba(18,28,45,.25)}
+  .modal h3{margin:0 0 5px;font-size:17px}
+  .modal .hint{font-size:12.5px;color:var(--muted);margin:0 0 18px;line-height:1.7}
+  .modal input[type=password],.modal input[type=text],.modal textarea{width:100%;border:1px solid var(--line2);
+    border-radius:8px;padding:10px 12px;font-size:13px;background:var(--surface);
+    color:var(--text);margin-top:5px;outline:none}
+  .modal input[type=file]{width:100%;color:var(--muted);font-size:12px}
+  .modal .actions{display:flex;gap:9px;margin-top:20px}
+  .modal .actions button{flex:1;border-radius:8px;padding:11px;font-size:13px;font-weight:650;cursor:pointer}
+  .btn-primary{background:var(--accent);color:#fff;border:1px solid var(--accent)}
+  .btn-primary:hover{background:var(--accent-dark)}
+  .btn-ghost{background:var(--surface);color:#4d5a6b;border:1px solid var(--line2)}
+  .btn-ghost:hover{background:var(--surface2)}
+  .btn-logout{background:var(--surface);color:var(--red);border:1px solid #f0c9c9}
+  .btn-logout:hover{background:#fff2f2}
+  .confirm-mask{position:fixed;inset:0;background:rgba(18,28,45,.45);display:none;
     align-items:center;justify-content:center;z-index:60;padding:20px}
   .confirm-mask.show{display:flex}
-  .confirm-box{background:#fff;border-radius:14px;width:100%;max-width:380px;padding:22px;
-    box-shadow:0 20px 60px rgba(16,24,40,.3)}
-  .confirm-box h3{margin:0 0 8px;font-size:16px;color:var(--err)}
-  .confirm-box p{margin:0;font-size:13px;line-height:1.7;color:#48536a}
-  .confirm-box .tname{font-weight:650;color:var(--text)}
-  .confirm-box .actions{display:flex;gap:9px;margin-top:20px}
-  .confirm-box .actions button{flex:1;border-radius:8px;padding:10px;font-size:13px;
-    font-weight:650;cursor:pointer}
-  .btn-danger{background:var(--err);color:#fff;border:0}
-  .btn-danger:hover{filter:brightness(1.08)}
+  .confirm-box{background:var(--surface);border:1px solid var(--line);border-radius:15px;
+    width:100%;max-width:400px;padding:24px;box-shadow:0 24px 60px rgba(18,28,45,.25)}
+  .confirm-box h3{margin:0 0 10px;font-size:16px;color:var(--red)}
+  .confirm-box p{margin:0;font-size:13px;line-height:1.7;color:#4d5a6b}
+  .confirm-box .tname{font-weight:700;color:var(--text)}
+  .confirm-box .actions{display:flex;gap:9px;margin-top:22px}
+  .confirm-box .actions button{flex:1;border-radius:8px;padding:11px;font-size:13px;font-weight:650;cursor:pointer}
+  .btn-danger{background:var(--red);color:#fff;border:1px solid var(--red)}
+  .btn-danger:hover{filter:brightness(.96)}
   .toast{position:fixed;left:50%;bottom:28px;transform:translateX(-50%) translateY(20px);
-    background:#1c2330;color:#fff;border-radius:9px;padding:11px 18px;font-size:13px;
-    box-shadow:0 8px 28px rgba(16,24,40,.28);opacity:0;pointer-events:none;
-    transition:opacity .22s,transform .22s;z-index:70;max-width:88vw;text-align:center}
+    background:#1b2430;color:#fff;border-radius:9px;padding:11px 18px;font-size:13px;
+    opacity:0;pointer-events:none;transition:opacity .2s,transform .2s;z-index:70;max-width:88vw;text-align:center}
   .toast.show{opacity:1;transform:translateX(-50%) translateY(0)}
-  .toast.err{background:#b73333}
-  .toast.ok{background:#137a4d}
+  .toast.err{background:#b73333} .toast.ok{background:#137a4d}
+
 </style>
 </head>
 <body>
@@ -148,13 +265,16 @@
   <div class="wrap">
     <div class="head-top">
       <div>
-        <h1>OC Theme Studio · 主题商店</h1>
+        <div class="brand"><span class="logo">OC</span><div><h1>OC Theme Studio · 主题商店</h1></div></div>
         <div class="sub">按完整主题 / 图标区 / 背景区 / 字体区 / EFI 配置包浏览、下载并上传 OpenCore 资源 — 任何平台都能通过浏览器参与</div>
       </div>
-      <button class="admin-btn" id="adminBtn" onclick="openAdmin()">管理员登录</button>
+      <div class="head-actions">
+        <button class="user-btn" id="userBtn" onclick="openAuth()">登录 / 注册</button>
+        <button class="admin-btn" id="adminBtn" onclick="openAdmin()">管理员登录</button>
+      </div>
     </div>
     <div class="bar">
-      <span style="font-size:12px;opacity:.85">App 服务器地址</span>
+      <span class="lbl">App 服务器地址</span>
       <code id="base"></code>
       <button onclick="copyBase(this)">复制地址</button>
     </div>
@@ -164,6 +284,10 @@
 <div class="wrap">
   <div class="cols">
     <section>
+      <div class="toolbar">
+        <input id="search" class="search" type="search" placeholder="搜索主题、作者或标签…" autocomplete="off">
+        <span class="result-info" id="resultInfo"></span>
+      </div>
       <div class="cats" id="cats"></div>
       <h2><span id="sectionTitle">全部主题</span> <span class="count" id="count">0</span></h2>
       <div class="grid" id="grid"></div>
@@ -255,6 +379,19 @@
           <div class="msg" id="relMsg"></div>
         </form>
       </div>
+      <div style="border-top:1px solid var(--line);padding-top:14px;margin-bottom:4px" id="grantSection">
+        <h3 style="margin:0 0 4px;font-size:15px">管理员授权</h3>
+        <p class="hint" style="margin:0 0 12px">把已注册的普通用户提升为管理员，对方登录后即可删除主题与任意评论。仅超级管理员（服务器配置的账号）可操作。</p>
+        <form id="grantForm">
+          <label>用户名</label>
+          <input type="text" id="grantUser" placeholder="对方注册时用的用户名" autocomplete="off" required>
+          <div class="actions" style="margin-top:14px">
+            <button type="submit" class="btn-primary" id="grantSubmit">授予管理员</button>
+          </div>
+          <div class="msg" id="grantMsg"></div>
+        </form>
+        <div class="cmt-list" id="adminUserList" style="margin-top:12px;max-height:160px"></div>
+      </div>
       <div class="actions">
         <button type="button" class="btn-ghost" onclick="closeAdmin()">关闭</button>
         <button type="button" class="btn-logout" onclick="adminLogout()">退出登录</button>
@@ -274,6 +411,81 @@
     </div>
   </div>
 </div>
+
+<div class="detail-mask" id="detailMask" onclick="if(event.target===this)closeDetail()">
+  <div class="detail" role="dialog" aria-modal="true" aria-label="主题详情">
+    <div class="detail-stage" id="detailStage">
+      <button class="detail-close" onclick="closeDetail()" aria-label="关闭">&times;</button>
+      <div class="nopic" id="detailNoPic">暂无预览图</div>
+      <button class="detail-nav prev" id="detailPrev" onclick="detailStep(-1)" aria-label="上一张">&#8249;</button>
+      <button class="detail-nav next" id="detailNext" onclick="detailStep(1)" aria-label="下一张">&#8250;</button>
+      <div class="detail-thumbs" id="detailThumbs" style="display:none"></div>
+      <div class="detail-dots" id="detailDots"></div>
+    </div>
+    <div class="detail-info">
+      <span class="cat-badge" id="detailCat">完整主题</span>
+      <h2 id="detailName"></h2>
+      <div class="detail-byline" id="detailByline"></div>
+      <div class="cover-tools" id="coverTools">
+        <span class="tip">封面管理</span>
+        <button type="button" onclick="document.getElementById('coverFile').click()">上传自定义封面</button>
+        <button type="button" id="coverGenBtn" onclick="genCover()">自动生成封面</button>
+        <button type="button" onclick="document.getElementById('previewFile').click()">追加预览图</button>
+        <button type="button" id="delCurPreviewBtn" onclick="delCurrentPreview()">删除当前图</button>
+        <input type="file" id="coverFile" accept="image/*" style="display:none" onchange="uploadCover(this)">
+        <input type="file" id="previewFile" accept="image/*" style="display:none" onchange="addPreview(this)">
+      </div>
+      <div class="detail-stats">
+        <div><div class="v" id="detailDownloads">0</div><div class="k">下载次数</div></div>
+        <div><div class="v" id="detailSize">—</div><div class="k">文件大小</div></div>
+        <div><div class="v" id="detailVer">—</div><div class="k">版本</div></div>
+      </div>
+      <div class="detail-desc" id="detailDesc"></div>
+      <div class="detail-tags" id="detailTags"></div>
+      <div class="comments">
+        <h4>评论 <span id="cmtCount"></span></h4>
+        <div id="cmtBox"></div>
+        <div class="cmt-list" id="cmtList"></div>
+      </div>
+      <div class="detail-actions">
+        <a class="dl" id="detailDownload" href="#" download>下载主题</a>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="modal-mask" id="authMask" onclick="if(event.target===this)closeAuth()">
+  <div class="modal">
+    <h3 id="authTitle">登录 / 注册</h3>
+    <p class="hint">注册后即可参与评论。用户名 2-20 位中文 / 字母 / 数字 / 下划线，密码 6 位以上；昵称用于评论区展示，可留空。</p>
+    <div class="auth-tabs">
+      <button type="button" id="tabLogin" class="on" onclick="authTab('login')">登录</button>
+      <button type="button" id="tabReg" onclick="authTab('reg')">注册</button>
+    </div>
+    <form id="authForm">
+      <label>用户名</label>
+      <input type="text" id="authUser" autocomplete="username" placeholder="你的用户名" required>
+      <label style="margin-top:11px" id="authNickRow">昵称（展示用，可留空）</label>
+      <input type="text" id="authNick" placeholder="评论区展示的名字，留空则用用户名">
+      <label style="margin-top:11px">密码</label>
+      <input type="password" id="authPass" autocomplete="current-password" placeholder="密码" required>
+      <label style="margin-top:11px" id="authPass2Row">确认密码</label>
+      <input type="password" id="authPass2" autocomplete="new-password" placeholder="再输一次密码">
+      <div class="actions">
+        <button type="button" class="btn-ghost" onclick="closeAuth()">取消</button>
+        <button type="submit" class="btn-primary" id="authSubmit">登录</button>
+      </div>
+      <div class="msg" id="authMsg"></div>
+    </form>
+    <div id="authLoggedIn" style="display:none">
+      <p class="hint" style="margin-bottom:14px">当前登录：<b id="authWho"></b></p>
+      <div class="actions">
+        <button type="button" class="btn-ghost" onclick="closeAuth()">关闭</button>
+        <button type="button" class="btn-logout" onclick="userLogout()">退出登录</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -321,10 +533,10 @@ function card(t){
   const tags=(t.tags||[]).slice(0,4).map(x=>`<span class="tag">${esc(x)}</span>`).join('');
   const dlText=t.category==='efi'?'下载配置包'
     :(!t.category||t.category==='theme')?'下载主题':'下载资源';
-  const delBtn=isAdmin
-    ? `<button class="del" data-id="${esc(t.id)}" data-name="${esc(t.name)}" onclick="deleteTheme(this)">删除</button>`
+  const delBtn=effectiveAdmin()
+    ? `<button class="del" data-id="${esc(t.id)}" data-name="${esc(t.name)}" onclick="event.stopPropagation();deleteTheme(this)">删除</button>`
     : '';
-  return `<div class="card">
+  return `<div class="card" data-id="${esc(t.id)}" onclick="openDetailById(this.dataset.id)" title="查看详情" style="cursor:pointer">
     <div class="thumb">${thumb(t)}</div>
     <div class="body">
       <div class="name">${esc(t.name)}</div>
@@ -333,8 +545,9 @@ function card(t){
         <span>${esc(t.sizeText||'')}</span></div>
       <div class="desc">${esc(t.description||'暂无简介')}</div>
       <div class="tags">${tags}</div>
-      <div class="row"><span class="meta">↓ ${t.downloads||0} 次下载</span>
-        ${delBtn}<a class="dl" href="${esc(t.download)}" download>${dlText}</a></div>
+      <div class="row"><span class="meta">${t.downloads||0} 次下载 · ${t.commentCount||0} 条评论</span>
+        ${delBtn}
+        <a class="dl" href="${esc(t.download)}" download onclick="event.stopPropagation()">${dlText}</a></div>
     </div></div>`;
 }
 
@@ -349,8 +562,63 @@ function setAdminUI(on){
   btn.innerHTML = on ? '<span class="dot"></span>管理员 · 已登录' : '管理员登录';
   document.getElementById('adminForm').style.display = on ? 'none' : '';
   document.getElementById('adminLoggedIn').style.display = on ? '' : 'none';
-  if(on) loadReleaseInfo();
+  if(on){ loadReleaseInfo(); loadAdminUsers(); }
 }
+// ---- 管理员授权（仅超级管理员）----
+async function loadAdminUsers(){
+  const box=document.getElementById('adminUserList');
+  try{
+    const r=await fetch('/api/admin/users',{headers:{'X-Admin-Token':adminToken}});
+    const arr=await r.json().catch(()=>null);
+    if(!r.ok||!Array.isArray(arr)){
+      // 静态口令模式或接口未开放：隐藏授权区
+      document.getElementById('grantSection').style.display = r.status===403?'none':'';
+      box.innerHTML = r.status===403?'':'<div class="cmt-empty">用户列表加载失败</div>';
+      return;
+    }
+    document.getElementById('grantSection').style.display='';
+    if(!arr.length){ box.innerHTML='<div class="cmt-empty">还没有注册用户。</div>'; return; }
+    box.innerHTML=arr.map(u=>`<div class="cmt"><div class="hd">
+      <span class="who">${esc(u.nick||u.login)}</span>
+      <span class="tm">@${esc(u.login)}${u.isAdmin?' · 管理员':''}</span>
+      ${u.isAdmin
+        ?`<button class="rm" onclick="revokeAdmin('${esc(u.login)}')">撤销</button>`
+        :`<button class="rm" style="color:var(--accent)" onclick="grantAdminName('${esc(u.login)}')">授予</button>`}
+      </div></div>`).join('');
+  }catch(e){ box.innerHTML='<div class="cmt-empty">加载失败：'+esc(e.message)+'</div>'; }
+}
+async function grantAdminName(name){
+  const msg=document.getElementById('grantMsg');
+  try{
+    const r=await fetch('/api/admin/users/grant',{method:'POST',
+      headers:{'Content-Type':'application/json','X-Admin-Token':adminToken},
+      body:JSON.stringify({username:name})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.detail||('HTTP '+r.status));
+    msg.className='msg ok'; msg.textContent='已授予 '+name+' 管理员权限';
+    showToast('已授予 '+name+' 管理员权限','ok');
+    loadAdminUsers();
+  }catch(e){ msg.className='msg err'; msg.textContent='授予失败：'+e.message; }
+}
+async function revokeAdmin(name){
+  const msg=document.getElementById('grantMsg');
+  try{
+    const r=await fetch('/api/admin/users/revoke',{method:'POST',
+      headers:{'Content-Type':'application/json','X-Admin-Token':adminToken},
+      body:JSON.stringify({username:name})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.detail||('HTTP '+r.status));
+    msg.className='msg ok'; msg.textContent='已撤销 '+name+' 的管理员权限';
+    showToast('已撤销 '+name+' 的管理员权限','ok');
+    loadAdminUsers();
+  }catch(e){ msg.className='msg err'; msg.textContent='撤销失败：'+e.message; }
+}
+document.getElementById('grantForm').addEventListener('submit', e=>{
+  e.preventDefault();
+  const name=document.getElementById('grantUser').value.trim();
+  if(!name) return;
+  grantAdminName(name).then(()=>{ document.getElementById('grantUser').value=''; });
+});
 function openAdmin(){
   document.getElementById('adminMsg').className='msg';
   document.getElementById('adminMsg').textContent='';
@@ -486,7 +754,7 @@ function closeConfirm(){
   pendingDelete=null;
 }
 function deleteTheme(b){
-  if(!adminToken){ showToast('请先点右上角「管理员登录」','err'); openAdmin(); return; }
+  if(!adminToken && !(userToken && userIsAdmin)){ showToast('请先登录管理员账号','err'); openAdmin(); return; }
   pendingDelete={btn:b,id:b.dataset.id,name:b.dataset.name||'该主题'};
   document.getElementById('confirmName').textContent='「'+pendingDelete.name+'」';
   document.getElementById('confirmMask').classList.add('show');
@@ -498,7 +766,7 @@ document.getElementById('confirmOk').addEventListener('click', async ()=>{
   btn.disabled=true; btn.textContent='删除中…';
   try{
     const r=await fetch('/api/themes/'+encodeURIComponent(id),{
-      method:'DELETE',headers:{'X-Admin-Token':adminToken}});
+      method:'DELETE',headers:{'X-Admin-Token':adminToken,'X-User-Token':userToken}});
     const d=await r.json().catch(()=>({}));
     if(!r.ok){
       if(r.status===401||r.status===403){
@@ -554,6 +822,7 @@ async function load(){
       ? '商店还没有主题，右侧上传第一个吧。'
       : '「'+current.label+'」还没有资源，换个分类看看，或从右侧上传。';
     document.getElementById('grid').innerHTML=list.map(card).join('');
+    applySearch();
   }catch(e){
     document.getElementById('count').textContent='0';
     document.getElementById('grid').innerHTML='';
@@ -593,8 +862,331 @@ document.getElementById('form').addEventListener('submit', async e=>{
     msg.className='msg err'; msg.textContent='上传失败：'+err.message;
   }finally{btn.disabled=false;}
 });
+
+// ---- 主题详情页 ----
+let detailImgs = [], detailIdx = 0, detailTheme = null;
+const THUMB_PER_PAGE = 3;   // 缩略条每页最多显示 3 张，超过即可翻页
+function closeDetail(){ document.getElementById('detailMask').classList.remove('show'); detailTheme=null; }
+function detailStep(d){
+  if(!detailImgs.length) return;
+  detailIdx = (detailIdx + d + detailImgs.length) % detailImgs.length;
+  detailRender();
+}
+function adminHeaders(){ return {'X-Admin-Token':adminToken||'','X-User-Token':userToken||''}; }
+function detailRender(){
+  const stage=document.getElementById('detailStage');
+  stage.querySelectorAll('img.gen').forEach(function(n){n.remove();});
+  const np=document.getElementById('detailNoPic');
+  if(!detailImgs.length){ np.style.display=''; }
+  else{
+    np.style.display='none';
+    detailImgs.forEach(function(src,i){
+      const im=document.createElement('img');
+      im.className='gen'+(i===detailIdx?' on':'');
+      im.src=src+(src.includes('?')?'&':'?')+'v='+(detailTheme&&detailTheme.updated?encodeURIComponent(detailTheme.updated):'1');
+      im.alt='预览图 '+(i+1);
+      stage.appendChild(im);
+    });
+  }
+  const multi=detailImgs.length>1;
+  document.getElementById('detailPrev').className='detail-nav prev'+(multi?' on':'');
+  document.getElementById('detailNext').className='detail-nav next'+(multi?' on':'');
+  const dots=document.getElementById('detailDots');
+  dots.innerHTML=(multi&&detailImgs.length<=THUMB_PER_PAGE)
+    ? detailImgs.map(function(_,i){return '<b class="'+(i===detailIdx?'on':'')+'" onclick="detailGo('+i+')"></b>';}).join('')
+    : '';
+  // 超过 3 张：缩略图翻页条（一页 3 张，左右箭头换页）
+  const tb=document.getElementById('detailThumbs');
+  if(detailImgs.length>THUMB_PER_PAGE){
+    const page=Math.floor(detailIdx/THUMB_PER_PAGE);
+    const pages=Math.ceil(detailImgs.length/THUMB_PER_PAGE);
+    const start=page*THUMB_PER_PAGE;
+    const items=detailImgs.slice(start,start+THUMB_PER_PAGE).map(function(src,j){
+      const i=start+j;
+      return '<img class="timg'+(i===detailIdx?' on':'')+'" src="'+esc(src)+'" alt="预览 '+(i+1)+'" onclick="detailGo('+i+')">';
+    }).join('');
+    tb.innerHTML='<button class="tp" title="上一页缩略图" onclick="thumbPage(-1)">&#8249;</button>'
+      +items
+      +'<button class="tp" title="下一页缩略图" onclick="thumbPage(1)">&#8250;</button>'
+      +'<span style="color:#9aa7b5;font-size:11px;margin-left:4px">'+(page+1)+'/'+pages+'</span>';
+    tb.style.display='flex';
+    dots.innerHTML='';   // 有缩略条时不再显示圆点，避免重复
+  }else{
+    tb.style.display='none'; tb.innerHTML='';
+  }
+}
+function thumbPage(d){
+  if(detailImgs.length<=THUMB_PER_PAGE) return;
+  const pages=Math.ceil(detailImgs.length/THUMB_PER_PAGE);
+  const page=Math.floor(detailIdx/THUMB_PER_PAGE);
+  const np=(page+d+pages)%pages;
+  detailIdx=np*THUMB_PER_PAGE;
+  detailRender();
+}
+function detailGo(i){ detailIdx=i; detailRender(); }
+function showDetail(t){
+  detailTheme=t;
+  detailImgs = (t.previews && t.previews.length) ? t.previews.slice()
+             : (t.thumbnail ? [t.thumbnail] : []);
+  detailIdx = 0;
+  document.getElementById('detailCat').textContent=t.categoryLabel||'完整主题';
+  document.getElementById('detailName').textContent=t.name||'未命名';
+  document.getElementById('detailByline').textContent='作者 '+(t.author||'匿名')+' · 更新于 '+(t.updated||'未知');
+  document.getElementById('detailDownloads').textContent=t.downloads||0;
+  document.getElementById('detailSize').textContent=t.sizeText||'—';
+  document.getElementById('detailVer').textContent=t.version?'v'+t.version:'—';
+  document.getElementById('detailDesc').textContent=t.description||'暂无简介';
+  const tags=t.tags||[];
+  document.getElementById('detailTags').innerHTML=tags.map(function(x){return '<span class="tag">'+esc(x)+'</span>';}).join('');
+  const dl=document.getElementById('detailDownload');
+  dl.href=t.download||'#';
+  dl.textContent=t.category==='efi'?'下载配置包':(!t.category||t.category==='theme')?'下载主题':'下载资源';
+  document.getElementById('coverTools').classList.toggle('on',effectiveAdmin());
+  detailRender();
+  document.getElementById('detailMask').classList.add('show');
+  loadComments(t.id);
+}
+async function openDetailById(id){
+  try{
+    const r=await fetch('/api/themes/'+encodeURIComponent(id));
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    showDetail(await r.json());
+  }catch(e){ showToast('加载详情失败：'+e.message,'err'); }
+}
+// ---- 封面 / 预览图管理（管理员）----
+function applyCoverResult(d,okText){
+  if(detailTheme&&d.id===detailTheme.id){
+    detailTheme=d;
+    detailImgs=(d.previews&&d.previews.length)?d.previews.slice():(d.thumbnail?[d.thumbnail]:[]);
+    detailIdx=Math.max(0,Math.min(detailIdx,detailImgs.length-1));
+    detailRender();
+  }
+  showToast(okText,'ok');
+  load();   // 刷新卡片缩略图
+}
+async function postCoverAction(url,fd,okText){
+  try{
+    const opt={method:'POST',headers:adminHeaders()};
+    if(fd) opt.body=fd;
+    const r=await fetch(url,opt);
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.detail||('HTTP '+r.status));
+    applyCoverResult(d,okText);
+  }catch(e){ showToast('操作失败：'+e.message,'err'); }
+}
+function uploadCover(inp){
+  const f=inp.files&&inp.files[0]; inp.value='';
+  if(!f||!detailTheme) return;
+  const fd=new FormData(); fd.append('file',f);
+  postCoverAction('/api/themes/'+encodeURIComponent(detailTheme.id)+'/cover',fd,'封面已更新');
+}
+function genCover(){
+  if(!detailTheme) return;
+  const btn=document.getElementById('coverGenBtn');
+  btn.disabled=true; btn.textContent='生成中…';
+  postCoverAction('/api/themes/'+encodeURIComponent(detailTheme.id)+'/cover/generate',null,'已自动生成封面')
+    .finally(()=>{btn.disabled=false;btn.textContent='自动生成封面';});
+}
+function addPreview(inp){
+  const f=inp.files&&inp.files[0]; inp.value='';
+  if(!f||!detailTheme) return;
+  const fd=new FormData(); fd.append('file',f);
+  postCoverAction('/api/themes/'+encodeURIComponent(detailTheme.id)+'/previews',fd,'预览图已添加');
+}
+async function delCurrentPreview(){
+  if(!detailTheme||!detailImgs.length) return;
+  const src=detailImgs[detailIdx];
+  const fname=decodeURIComponent(src.split('/').pop().split('?')[0]);
+  if(!confirm('删除当前这张预览图「'+fname+'」？')) return;
+  try{
+    const r=await fetch('/api/themes/'+encodeURIComponent(detailTheme.id)+'/previews/'+encodeURIComponent(fname),
+      {method:'DELETE',headers:adminHeaders()});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.detail||('HTTP '+r.status));
+    applyCoverResult(d,'已删除预览图');
+  }catch(e){ showToast('删除失败：'+e.message,'err'); }
+}
+document.addEventListener('keydown',function(e){
+  if(!document.getElementById('detailMask').classList.contains('show')) return;
+  if(e.key==='Escape') closeDetail();
+  else if(e.key==='ArrowLeft') detailStep(-1);
+  else if(e.key==='ArrowRight') detailStep(1);
+});
+
+// ---- 普通用户：注册 / 登录 / 会话 ----
+let userToken = localStorage.getItem('oc_user_token') || '';
+let userName = localStorage.getItem('oc_user_name') || '';
+let userIsAdmin = false;   // 被授予管理员权限的普通用户
+let authMode = 'login';
+
+function effectiveAdmin(){ return isAdmin || userIsAdmin; }
+function setUserUI(){
+  const btn=document.getElementById('userBtn');
+  if(userName){
+    btn.classList.add('on');
+    btn.innerHTML='<span class="dot" style="background:var(--green)"></span>'+esc(userName)+(userIsAdmin?'（管理员）':'');
+  }else{
+    btn.classList.remove('on');
+    btn.textContent='登录 / 注册';
+  }
+  document.getElementById('authForm').style.display = userName?'none':'';
+  document.querySelector('#authMask .auth-tabs').style.display = userName?'none':'';
+  document.getElementById('authLoggedIn').style.display = userName?'':'none';
+  if(userName) document.getElementById('authWho').textContent=userName;
+}
+function authTab(m){
+  authMode=m;
+  document.getElementById('tabLogin').classList.toggle('on',m==='login');
+  document.getElementById('tabReg').classList.toggle('on',m==='reg');
+  document.getElementById('authSubmit').textContent = m==='login'?'登录':'注册';
+  document.getElementById('authNickRow').style.display = m==='reg'?'':'none';
+  document.getElementById('authNick').style.display = m==='reg'?'':'none';
+  document.getElementById('authPass2Row').style.display = m==='reg'?'':'none';
+  document.getElementById('authPass2').style.display = m==='reg'?'':'none';
+  document.getElementById('authPass').autocomplete = m==='reg'?'new-password':'current-password';
+}
+function openAuth(){
+  document.getElementById('authMsg').className='msg';
+  document.getElementById('authMsg').textContent='';
+  document.getElementById('authMask').classList.add('show');
+  setUserUI();
+  if(!userName) setTimeout(()=>document.getElementById('authUser').focus(),50);
+}
+function closeAuth(){ document.getElementById('authMask').classList.remove('show'); }
+async function checkUserSession(){
+  if(!userToken){ userName=''; userIsAdmin=false; setUserUI(); return; }
+  try{
+    const r=await fetch('/api/users/session',{headers:{'X-User-Token':userToken}});
+    const d=await r.json().catch(()=>({}));
+    if(d.valid){
+      userName=d.user; userIsAdmin=!!d.isAdmin;
+      localStorage.setItem('oc_user_name',userName);
+      setUserUI();
+      load();   // 刷新卡片删除按钮（被授予管理员的用户可见）
+    }
+    else{ localStorage.removeItem('oc_user_token'); localStorage.removeItem('oc_user_name');
+          userToken=''; userName=''; userIsAdmin=false; setUserUI(); }
+  }catch(e){ setUserUI(); }
+}
+async function userLogout(){
+  try{ await fetch('/api/users/logout',{method:'POST',headers:{'X-User-Token':userToken}}); }catch(e){}
+  localStorage.removeItem('oc_user_token'); localStorage.removeItem('oc_user_name');
+  userToken=''; userName=''; userIsAdmin=false; setUserUI(); closeAuth();
+  if(document.getElementById('detailMask').classList.contains('show')&&detailCurrentId) loadComments(detailCurrentId);
+  showToast('已退出登录','ok');
+}
+document.getElementById('authForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const msg=document.getElementById('authMsg'), btn=document.getElementById('authSubmit');
+  const u=document.getElementById('authUser').value.trim();
+  const p=document.getElementById('authPass').value;
+  if(authMode==='reg'){
+    const p2=document.getElementById('authPass2').value;
+    if(p!==p2){ msg.className='msg err'; msg.textContent='两次输入的密码不一致'; return; }
+  }
+  msg.className='msg'; msg.textContent=authMode==='login'?'正在登录…':'正在注册…'; btn.disabled=true;
+  try{
+    const r=await fetch(authMode==='login'?'/api/users/login':'/api/users/register',{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({username:u,password:p,
+        nickname:(document.getElementById('authNick').value||'').trim()})});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.detail||('HTTP '+r.status));
+    userToken=d.token; userName=d.user;
+    localStorage.setItem('oc_user_token',userToken);
+    localStorage.setItem('oc_user_name',userName);
+    document.getElementById('authPass').value='';
+    document.getElementById('authPass2').value='';
+    setUserUI(); closeAuth();
+    showToast(authMode==='login'?('欢迎回来，'+userName):('注册成功，'+userName),'ok');
+    checkUserSession();   // 拿 isAdmin 标志并刷新卡片
+    if(document.getElementById('detailMask').classList.contains('show')&&detailCurrentId) loadComments(detailCurrentId);
+  }catch(err){ msg.className='msg err'; msg.textContent=err.message; }
+  finally{ btn.disabled=false; }
+});
+
+// ---- 评论区 ----
+let detailCurrentId = '';
+async function loadComments(tid){
+  detailCurrentId=tid;
+  const list=document.getElementById('cmtList');
+  const box=document.getElementById('cmtBox');
+  const cnt=document.getElementById('cmtCount');
+  try{
+    const r=await fetch('/api/themes/'+encodeURIComponent(tid)+'/comments');
+    if(!r.ok) throw new Error('HTTP '+r.status);
+    const arr=await r.json();
+    cnt.textContent=arr.length?('（'+arr.length+'）'):'';
+    if(!arr.length){ list.innerHTML='<div class="cmt-empty">还没有评论，来抢沙发。</div>'; }
+    else{
+      list.innerHTML=arr.map(c=>{
+        const mine=userName&&c.user===userName;
+        const rm=(mine||effectiveAdmin())?`<button class="rm" data-cid="${esc(c.id)}" onclick="delComment(this)">删除</button>`:'';
+        return `<div class="cmt"><div class="hd"><span class="who">${esc(c.user)}</span>
+          <span class="tm">${esc(c.time||'')}</span>${rm}</div>
+          <div class="tx">${esc(c.text)}</div></div>`;
+      }).join('');
+    }
+    box.innerHTML = userName
+      ? `<div class="cmt-form"><textarea id="cmtText" maxlength="500" placeholder="说点什么…（最多 500 字）"></textarea>
+         <button type="button" onclick="postComment()">发表</button></div>`
+      : `<div class="cmt-login-hint"><a onclick="openAuth()">登录 / 注册</a> 后即可参与评论</div>`;
+  }catch(e){
+    cnt.textContent='';
+    list.innerHTML='<div class="cmt-empty">评论加载失败：'+esc(e.message)+'</div>';
+    box.innerHTML='';
+  }
+}
+async function postComment(){
+  const ta=document.getElementById('cmtText');
+  const text=(ta.value||'').trim();
+  if(!text){ showToast('评论内容不能为空','err'); return; }
+  try{
+    const r=await fetch('/api/themes/'+encodeURIComponent(detailCurrentId)+'/comments',{
+      method:'POST',headers:{'Content-Type':'application/json','X-User-Token':userToken},
+      body:JSON.stringify({text:text})});
+    const d=await r.json().catch(()=>({}));
+    if(r.status===401){ showToast('登录已过期，请重新登录','err'); openAuth(); return; }
+    if(!r.ok) throw new Error(d.detail||('HTTP '+r.status));
+    ta.value='';
+    await loadComments(detailCurrentId);
+    await load();   // 刷新卡片上的评论数
+    showToast('评论已发表','ok');
+  }catch(e){ showToast('评论失败：'+e.message,'err'); }
+}
+async function delComment(b){
+  const cid=b.dataset.cid;
+  try{
+    const r=await fetch('/api/themes/'+encodeURIComponent(detailCurrentId)+'/comments/'+encodeURIComponent(cid),{
+      method:'DELETE',headers:{'X-User-Token':userToken,'X-Admin-Token':adminToken}});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.detail||('HTTP '+r.status));
+    await loadComments(detailCurrentId);
+    await load();
+    showToast('评论已删除','ok');
+  }catch(e){ showToast('删除失败：'+e.message,'err'); }
+}
+
+// ---- 客户端搜索（仅过滤已渲染卡片，不改动数据逻辑）----
+function applySearch(){
+  const q=(document.getElementById('search').value||'').trim().toLowerCase();
+  const cards=document.querySelectorAll('#grid .card');
+  let shown=0;
+  cards.forEach(function(c){
+    const hit=!q || c.textContent.toLowerCase().indexOf(q)>=0;
+    c.style.display=hit?'':'none';
+    if(hit) shown++;
+  });
+  const info=document.getElementById('resultInfo');
+  if(info) info.textContent = q ? ('匹配 '+shown+' 个资源') : '';
+}
+document.getElementById('search').addEventListener('input',applySearch);
+
 setCategoryHint();
+authTab('login');
+setUserUI();
 initAdmin();
+checkUserSession();
 loadCategories().then(load);
 </script>
 </body>
