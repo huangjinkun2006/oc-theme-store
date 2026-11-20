@@ -179,19 +179,41 @@
     border-radius:7px;padding:6px 11px;font-size:12px;font-weight:600;cursor:pointer}
   .cover-tools button:hover{border-color:var(--accent);color:var(--accent)}
   .cover-tools .tip{font-size:11.5px;color:var(--muted);align-self:center}
-  .detail-info{padding:26px 26px 24px;overflow-y:auto;display:flex;flex-direction:column}
+  .detail-info{padding:22px 24px 0;overflow-y:auto;display:flex;flex-direction:column}
   .detail-info .cat-badge{align-self:flex-start}
-  .detail-info h2{font-size:21px;margin:12px 0 4px;font-weight:700;line-height:1.3}
-  .detail-byline{font-size:12px;color:var(--muted);margin-bottom:16px}
-  .detail-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px;
-    border:1px solid var(--line);border-radius:10px;padding:12px}
+  .detail-info h2{font-size:21px;margin:10px 0 10px;font-weight:700;line-height:1.3}
+  /* 作者行：头像 + 昵称 + 更新时间（迷你世界世界详情的组织方式） */
+  .author-row{display:flex;align-items:center;gap:10px;margin-bottom:14px}
+  .author-avatar{width:34px;height:34px;border-radius:50%;flex:0 0 auto;display:flex;
+    align-items:center;justify-content:center;background:var(--accent);color:#fff;
+    font-size:14px;font-weight:700}
+  .author-name{font-size:12.5px;font-weight:700;color:var(--text)}
+  .detail-byline{font-size:11px;color:var(--muted);margin-top:2px}
+  .detail-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:16px;
+    border:1px solid var(--line);border-radius:10px;padding:11px 8px;background:var(--surface2)}
   .detail-stats div{text-align:center}
-  .detail-stats .v{font-size:15px;font-weight:700;color:var(--text)}
-  .detail-stats .k{font-size:10.5px;color:var(--muted);margin-top:2px}
-  .detail-desc{font-size:13px;line-height:1.8;color:#4d5a6b;white-space:pre-wrap;
-    border-top:1px solid var(--line);padding-top:14px;margin-bottom:14px}
-  .detail-tags{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:18px}
-  .detail-actions{display:flex;gap:10px;margin-top:auto;padding-top:14px;border-top:1px solid var(--line)}
+  .detail-stats .v{font-size:14px;font-weight:700;color:var(--text);font-variant-numeric:tabular-nums}
+  .detail-stats .k{font-size:10px;color:var(--muted);margin-top:2px}
+  .detail-sec{margin-bottom:16px}
+  .detail-sec h5{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.5px;
+    margin:0 0 8px;text-transform:uppercase}
+  .detail-desc{font-size:12.5px;line-height:1.75;color:#4d5a6b;white-space:pre-wrap}
+  .detail-desc.folded{max-height:88px;overflow:hidden;position:relative}
+  .detail-desc.folded:after{content:"";position:absolute;left:0;right:0;bottom:0;height:28px;
+    background:linear-gradient(transparent,var(--surface))}
+  .desc-more{border:0;background:none;color:var(--accent);font-size:11.5px;font-weight:650;
+    cursor:pointer;padding:4px 0 0}
+  .detail-tags{display:flex;gap:6px;flex-wrap:wrap}
+  /* 同分类相关推荐：横滑小卡片 */
+  .related{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
+  .rel-card{flex:0 0 92px;cursor:pointer;border:1px solid var(--line);border-radius:9px;
+    background:var(--surface);overflow:hidden;text-align:left;padding:0}
+  .rel-card:hover{border-color:var(--accent)}
+  .rel-card img{width:92px;height:58px;object-fit:cover;display:block;background:var(--surface2)}
+  .rel-card span{display:block;font-size:10.5px;color:var(--text);font-weight:600;
+    padding:5px 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .detail-actions{display:flex;gap:10px;margin-top:auto;padding:12px 0 18px;
+    border-top:1px solid var(--line);position:sticky;bottom:0;background:var(--surface);z-index:2}
   .detail-actions .dl{margin-left:0;flex:1;text-align:center;font-size:13px;padding:12px}
   /* 评论区 */
   .comments{border-top:1px solid var(--line);padding-top:14px;margin-top:2px}
@@ -425,7 +447,13 @@
     <div class="detail-info">
       <span class="cat-badge" id="detailCat">完整主题</span>
       <h2 id="detailName"></h2>
-      <div class="detail-byline" id="detailByline"></div>
+      <div class="author-row">
+        <span class="author-avatar" id="detailAvatar">O</span>
+        <div>
+          <div class="author-name" id="detailAuthor"></div>
+          <div class="detail-byline" id="detailByline"></div>
+        </div>
+      </div>
       <div class="cover-tools" id="coverTools">
         <span class="tip">封面管理</span>
         <button type="button" onclick="document.getElementById('coverFile').click()">上传自定义封面</button>
@@ -436,12 +464,24 @@
         <input type="file" id="previewFile" accept="image/*" style="display:none" onchange="addPreview(this)">
       </div>
       <div class="detail-stats">
-        <div><div class="v" id="detailDownloads">0</div><div class="k">下载次数</div></div>
-        <div><div class="v" id="detailSize">—</div><div class="k">文件大小</div></div>
+        <div><div class="v" id="detailDownloads">0</div><div class="k">下载</div></div>
+        <div><div class="v" id="detailCommentCount">0</div><div class="k">评论</div></div>
+        <div><div class="v" id="detailSize">—</div><div class="k">大小</div></div>
         <div><div class="v" id="detailVer">—</div><div class="k">版本</div></div>
       </div>
-      <div class="detail-desc" id="detailDesc"></div>
-      <div class="detail-tags" id="detailTags"></div>
+      <div class="detail-sec">
+        <h5>主题简介</h5>
+        <div class="detail-desc folded" id="detailDesc"></div>
+        <button type="button" class="desc-more" id="descMore" onclick="toggleDesc()">展开全文</button>
+      </div>
+      <div class="detail-sec">
+        <h5>标签</h5>
+        <div class="detail-tags" id="detailTags"></div>
+      </div>
+      <div class="detail-sec" id="relatedSec" style="display:none">
+        <h5>同分类推荐</h5>
+        <div class="related" id="detailRelated"></div>
+      </div>
       <div class="comments">
         <h4>评论 <span id="cmtCount"></span></h4>
         <div id="cmtBox"></div>
@@ -521,6 +561,7 @@ const CATEGORY_HINTS = {
 };
 let categories = [{id:'all',label:'全部',count:0}].concat(CATEGORY_FALLBACK);
 let activeCat = 'all';
+let allThemes = [];   // 当前列表缓存，详情页「同分类推荐」复用
 
 function setCategoryHint(){
   const v=document.getElementById('category').value;
@@ -816,6 +857,7 @@ async function load(){
     if(!r.ok) throw new Error('HTTP '+r.status);
     const list=await r.json();
     if(!Array.isArray(list)) throw new Error('返回数据格式异常');
+    allThemes=list;
     document.getElementById('count').textContent=list.length;
     empty.style.display=list.length?'none':'block';
     if(!list.length) empty.textContent=activeCat==='all'
@@ -931,13 +973,27 @@ function showDetail(t){
   detailIdx = 0;
   document.getElementById('detailCat').textContent=t.categoryLabel||'完整主题';
   document.getElementById('detailName').textContent=t.name||'未命名';
-  document.getElementById('detailByline').textContent='作者 '+(t.author||'匿名')+' · 更新于 '+(t.updated||'未知');
+  const author=t.author||'匿名';
+  document.getElementById('detailAuthor').textContent=author;
+  const av=document.getElementById('detailAvatar');
+  av.textContent=author.slice(0,1).toUpperCase();
+  // 头像底色按作者名稳定取色，保持单一蓝色强调风格内的层次
+  const avColors=['#2563eb','#0f766e','#7c3aed','#b45309','#be123c','#1d4ed8'];
+  let h=0; for(let i=0;i<author.length;i++){h=(h*31+author.charCodeAt(i))>>>0;}
+  av.style.background=avColors[h%avColors.length];
+  document.getElementById('detailByline').textContent='更新于 '+(t.updated||'未知');
   document.getElementById('detailDownloads').textContent=t.downloads||0;
+  document.getElementById('detailCommentCount').textContent=t.commentCount||0;
   document.getElementById('detailSize').textContent=t.sizeText||'—';
   document.getElementById('detailVer').textContent=t.version?'v'+t.version:'—';
-  document.getElementById('detailDesc').textContent=t.description||'暂无简介';
+  const desc=document.getElementById('detailDesc');
+  desc.textContent=t.description||'暂无简介';
+  desc.classList.toggle('folded',desc.textContent.length>90);
+  document.getElementById('descMore').style.display=desc.textContent.length>90?'':'none';
+  document.getElementById('descMore').textContent='展开全文';
   const tags=t.tags||[];
   document.getElementById('detailTags').innerHTML=tags.map(function(x){return '<span class="tag">'+esc(x)+'</span>';}).join('');
+  renderRelated(t);
   const dl=document.getElementById('detailDownload');
   dl.href=t.download||'#';
   dl.textContent=t.category==='efi'?'下载配置包':(!t.category||t.category==='theme')?'下载主题':'下载资源';
@@ -945,6 +1001,22 @@ function showDetail(t){
   detailRender();
   document.getElementById('detailMask').classList.add('show');
   loadComments(t.id);
+}
+function toggleDesc(){
+  const d=document.getElementById('detailDesc'), b=document.getElementById('descMore');
+  const folded=d.classList.toggle('folded');
+  b.textContent=folded?'展开全文':'收起';
+}
+function renderRelated(t){
+  const sec=document.getElementById('relatedSec'), box=document.getElementById('detailRelated');
+  const same=allThemes.filter(function(x){return x.id!==t.id&&(x.category||'theme')===(t.category||'theme');}).slice(0,6);
+  if(!same.length){ sec.style.display='none'; box.innerHTML=''; return; }
+  sec.style.display='';
+  box.innerHTML=same.map(function(x){
+    const img=x.thumbnail?('<img src="'+esc(x.thumbnail)+'" alt="">'):'<img alt="">';
+    return '<button type="button" class="rel-card" onclick="openDetailById(\''+esc(x.id)+'\')">'+img
+      +'<span>'+esc(x.name)+'</span></button>';
+  }).join('');
 }
 async function openDetailById(id){
   try{
@@ -1117,6 +1189,8 @@ async function loadComments(tid){
     if(!r.ok) throw new Error('HTTP '+r.status);
     const arr=await r.json();
     cnt.textContent=arr.length?('（'+arr.length+'）'):'';
+    const stat=document.getElementById('detailCommentCount');
+    if(stat) stat.textContent=arr.length;
     if(!arr.length){ list.innerHTML='<div class="cmt-empty">还没有评论，来抢沙发。</div>'; }
     else{
       list.innerHTML=arr.map(c=>{
