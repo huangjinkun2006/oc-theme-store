@@ -62,6 +62,7 @@ OC Theme Studio · 主题商店后端（可自托管 / 可部署到任意 Python
     POST /api/users/login        普通账号登录
     POST /api/users/logout       注销普通账号会话
     GET  /api/users/session      校验普通账号会话
+    GET  /api/users/{login}/profile  公开个人主页（昵称/统计/上传主题/评论，不含凭据）
     GET  /api/admin/check-user   查询当前登录用户是否为被授予的管理员
     GET  /api/admin/users        管理员名单（仅超级管理员）
     POST /api/admin/users/grant  授予某注册用户管理员权限（仅超级管理员）
@@ -266,6 +267,7 @@ def to_public(meta: dict) -> dict:
         "id": tid,
         "name": meta.get("name", ""),
         "author": meta.get("author", ""),
+        "authorLogin": meta.get("authorLogin", "") or meta.get("authorKey", ""),
         "description": meta.get("description", ""),
         "version": meta.get("version", ""),
         "tags": meta.get("tags", []),
@@ -881,6 +883,10 @@ async def upload_theme(
     # 可选上传口令：未配置 STORE_UPLOAD_TOKEN 时保持开放，兼容现有 App
     if UPLOAD_TOKEN and request.headers.get("X-Upload-Token") != UPLOAD_TOKEN:
         raise HTTPException(status_code=401, detail="上传口令不正确")
+    urec = user_session(user_token_from(request))   # 登录后上传会关联到个人主页
+    author = (author or "").strip()
+    if not author and urec:
+        author = str(urec.get("user") or urec.get("login") or "").strip()
     name = (name or "").strip()
     if not name:
         raise HTTPException(status_code=400, detail="主题名称不能为空")
@@ -922,6 +928,11 @@ async def upload_theme(
             description=(description or "").strip()[:1000],
             version=(version or "1.0").strip()[:24],
             tags=tag_list, category=cat, previews=pv)
+        if urec:
+            meta["authorKey"] = urec["key"]
+            meta["authorLogin"] = str(urec.get("login") or "")
+            meta_path(str(meta.get("id", ""))).write_text(
+                json.dumps(meta, ensure_ascii=False, indent=2), encoding="utf-8")
     finally:
         try:
             tmp.unlink()
@@ -1229,6 +1240,78 @@ def user_session_check(request: Request):
     return {"valid": False}
 
 
+def find_user_record(login: str):
+    """按用户名或昵称查找注册用户；昵称查找让详情页作者名也能直达主页。"""
+    key = str(login or "").strip().lower()
+    if not key:
+        return None, ""
+    with _USERS_LOCK:
+        users = load_users()
+    rec = users.get(key)
+    if rec:
+        return rec, key
+    for k, r in users.items():
+        if str(r.get("nick") or "").strip().lower() == key:
+            return r, k
+    return None, ""
+
+
+def author_belongs_to(rec: dict, key: str, meta: dict) -> bool:
+    """登录上传优先用 authorKey 精确归属；老数据用作者显示名兜底。"""
+    if key and str(meta.get("authorKey") or "").lower() == key:
+        return True
+    a = str(meta.get("author") or "").strip().lower()
+    if not a:
+        return False
+    names = [str(rec.get("name") or ""), str(rec.get("nick") or "")]
+    return any(a == n.strip().lower() for n in names if n.strip())
+
+
+@app.get("/api/users/{login}/profile")
+def user_profile(login: str):
+    """公开个人主页：昵称、注册时间、上传主题、评论与汇总统计（不含凭据）。"""
+    rec, key = find_user_record(login)
+    if rec is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    metas = list_meta()
+    public = {m.get("id", ""): to_public(m) for m in metas if m.get("id")}
+    themes = [public[m["id"]] for m in metas
+              if m.get("id") and author_belongs_to(rec, key, m)]
+    themes.sort(key=lambda t: str(t.get("updated") or ""), reverse=True)
+    comments = []
+    for m in metas:
+        tid = str(m.get("id") or "")
+        if not tid:
+            continue
+        for c in read_comments(tid):
+            if str(c.get("key") or "").lower() != key:
+                continue
+            tp = public.get(tid, {})
+            comments.append({
+                "id": c.get("id"),
+                "text": c.get("text", ""),
+                "time": c.get("time", ""),
+                "ts": c.get("ts", 0),
+                "theme": {
+                    "id": tid,
+                    "name": tp.get("name") or m.get("name", ""),
+                    "thumbnail": tp.get("thumbnail", ""),
+                    "categoryLabel": tp.get("categoryLabel", ""),
+                },
+            })
+    comments.sort(key=lambda c: c.get("ts", 0), reverse=True)
+    return {
+        "login": rec.get("name", ""),
+        "nick": rec.get("nick") or rec.get("name", ""),
+        "created": rec.get("created", ""),
+        "themeCount": len(themes),
+        "commentCount": len(comments),
+        "downloadCount": sum(int(t.get("downloads") or 0) for t in themes),
+        "themes": themes,
+        "comments": comments,
+    }
+
+
 # ---------------------------------------------------------------------------
 # 管理员授权：超级管理员把已注册用户提升 / 降为管理员
 # ---------------------------------------------------------------------------
@@ -1323,8 +1406,14 @@ def get_comments(tid: str):
         raise HTTPException(status_code=404, detail="主题不存在")
     items = read_comments(tid)
     items.sort(key=lambda c: c.get("ts", 0), reverse=True)
-    return [{"id": c.get("id"), "user": c.get("user"), "text": c.get("text"),
-             "time": c.get("time"), "ts": c.get("ts", 0)} for c in items]
+    with _USERS_LOCK:
+        users = load_users()
+    def _login_of(c):
+        k = str(c.get("key") or "").lower()
+        return (users.get(k) or {}).get("name", "") or k
+    return [{"id": c.get("id"), "user": c.get("user"), "login": _login_of(c),
+             "text": c.get("text"), "time": c.get("time"), "ts": c.get("ts", 0)}
+            for c in items]
 
 
 @app.post("/api/themes/{tid}/comments")

@@ -136,6 +136,11 @@ docker compose up -d          # 含命名卷 ocstore-data，重启不丢数据
 | `POST` | `/api/admin/login` | JSON `{username, password}` → `{ok, token, expiresAt}`，含失败限速 |
 | `POST` | `/api/admin/logout` | 注销当前会话 |
 | `GET` | `/api/admin/session` | 带 `X-Admin-Token` 返回 `{valid, user}`，用于刷新页面时恢复登录态 |
+| `POST` | `/api/users/register` | 普通账号注册（用户名 + 密码，可选昵称），成功即签发 `X-User-Token` |
+| `POST` | `/api/users/login` | 普通账号登录 |
+| `POST` | `/api/users/logout` | 注销普通账号会话 |
+| `GET` | `/api/users/session` | 校验普通账号会话，带 `X-User-Token` |
+| `GET` | `/api/users/{login}/profile` | 公开个人主页：昵称、注册时间、上传主题、评论与统计；用户名或昵称均可查，不返回凭据 |
 | `GET` | `/files/{id}/{path}` | 预览图等静态文件（含目录穿越防护） |
 | `GET` | `/static/{filename}` | 页脚备案图标等 `web/` 下静态素材（文件名 + 后缀白名单） |
 
@@ -154,8 +159,9 @@ curl -X DELETE https://your-store.example/api/themes/t_xxxx \
 `POST /api/themes` 表单字段：`name*`、`author`、`description`、`version`、`category`（`theme` / `icons` / `background` / `fonts` / `efi` 或中文名称，默认 `theme`）、`tags`（逗号分隔）、`package*`（.zip）、`previews`（多张图片，可重复）。
 
 返回的主题对象字段：
-`id, name, author, description, version, tags[], category, categoryLabel, thumbnail, download, previewCount, sizeText, updated, downloads`。
+`id, name, author, authorLogin, description, version, tags[], category, categoryLabel, thumbnail, previews[], cover, download, previewCount, commentCount, sizeText, updated, downloads`。
 其中 `thumbnail` / `download` 是以 `/` 开头的相对路径，由客户端拼接服务器地址；`category` 存 slug，`categoryLabel` 是中文显示名。
+登录后从网页上传主题会自动写入 `authorLogin` 归属个人主页；老主题按作者显示名与用户名/昵称匹配，匹配不到则不进入任何主页。
 
 示例：
 ```bash
