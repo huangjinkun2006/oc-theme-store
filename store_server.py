@@ -63,6 +63,10 @@ OC Theme Studio · 主题商店后端（可自托管 / 可部署到任意 Python
     POST /api/users/logout       注销普通账号会话
     GET  /api/users/session      校验普通账号会话
     GET  /api/users/{login}/profile  公开个人主页（昵称/统计/上传主题/评论，不含凭据）
+    POST /api/users/me/profile   修改本人资料（用户名/昵称/简介/密码，需 X-User-Token）
+    POST /api/users/me/avatar    上传本人头像（multipart，≤2 MB，需 X-User-Token）
+    DELETE /api/users/me/avatar  移除本人头像，恢复默认字母头像
+    GET  /api/users/{login}/avatar   头像图片（无自定义头像时返回字母 SVG）
     GET  /api/admin/check-user   查询当前登录用户是否为被授予的管理员
     GET  /api/admin/users        管理员名单（仅超级管理员）
     POST /api/admin/users/grant  授予某注册用户管理员权限（仅超级管理员）
@@ -92,12 +96,13 @@ import mimetypes
 import threading
 from html import escape as html_escape
 from pathlib import Path
+from urllib.parse import quote as url_quote
 from datetime import datetime, timezone
 from typing import Optional, List
 
 import uvicorn
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
-from fastapi.responses import FileResponse, JSONResponse, HTMLResponse
+from fastapi.responses import FileResponse, JSONResponse, HTMLResponse, Response
 from fastapi.middleware.cors import CORSMiddleware
 
 # ---------------------------------------------------------------------------
@@ -108,6 +113,8 @@ DATA = Path(os.environ.get("STORE_DATA", ROOT / "store_data")).resolve()
 DATA.mkdir(parents=True, exist_ok=True)
 THEMES_DIR = DATA / "themes"
 THEMES_DIR.mkdir(parents=True, exist_ok=True)
+AVATARS_DIR = DATA / "avatars"
+AVATARS_DIR.mkdir(parents=True, exist_ok=True)
 HOST = os.environ.get("STORE_HOST", "0.0.0.0")
 # 托管平台通常注入 PORT；本地可用 STORE_PORT 覆盖；最后兜底 8000
 PORT = int(os.environ.get("PORT") or os.environ.get("STORE_PORT") or "8000")
@@ -268,6 +275,8 @@ def to_public(meta: dict) -> dict:
         "name": meta.get("name", ""),
         "author": meta.get("author", ""),
         "authorLogin": meta.get("authorLogin", "") or meta.get("authorKey", ""),
+        "authorAvatar": author_avatar_url(
+            meta.get("authorLogin") or meta.get("authorKey") or meta.get("author") or ""),
         "description": meta.get("description", ""),
         "version": meta.get("version", ""),
         "tags": meta.get("tags", []),
@@ -653,6 +662,48 @@ def save_users(users: dict):
     tmp = DATA / ("users_" + uuid.uuid4().hex[:8] + ".tmp")
     tmp.write_text(json.dumps(users, ensure_ascii=False, indent=2), encoding="utf-8")
     tmp.replace(USERS_FILE)
+
+
+AVATAR_EXTS = (".png", ".jpg", ".jpeg", ".webp", ".gif")
+AVATAR_MAX_BYTES = 2 * 1024 * 1024
+BIO_MAX = 160
+
+
+def user_avatar_url(login: str) -> str:
+    """头像统一走 /api/users/{login}/avatar；未上传时后端返回字母 SVG。"""
+    login = str(login or "").strip()
+    return "/api/users/" + url_quote(login, safe="") + "/avatar" if login else ""
+
+
+def author_avatar_url(login: str) -> str:
+    """只有真实注册用户才给头像 URL；其他作者名留给前端显示首字母占位。"""
+    rec, key = find_user_record(login)
+    return user_avatar_url(rec.get("name") or key) if rec else ""
+
+
+def public_user_fields(rec: dict, key: str) -> dict:
+    """注册/登录/会话共用的公开用户字段，不含 pwd / admin 等敏感信息。"""
+    name = rec.get("name") or key
+    return {
+        "user": rec.get("nick") or name,
+        "login": name,
+        "nick": rec.get("nick") or name,
+        "avatar": user_avatar_url(name),
+        "bio": str(rec.get("bio") or ""),
+    }
+
+
+def default_avatar_svg(login: str) -> bytes:
+    label = html_escape((str(login or "?").strip()[:1] or "?").upper())
+    hue = int(hashlib.sha256(str(login or "?").encode("utf-8")).hexdigest()[:6], 16) % 360
+    svg = (
+        '<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" '
+        'viewBox="0 0 128 128"><rect width="128" height="128" rx="64" '
+        f'fill="hsl({hue}, 48%, 52%)"/>'
+        '<text x="64" y="84" text-anchor="middle" font-size="60" '
+        f'font-family="sans-serif" fill="#fff">{label}</text></svg>'
+    )
+    return svg.encode("utf-8")
 
 
 def hash_password(pwd: str, salt: Optional[str] = None) -> str:
@@ -1188,8 +1239,9 @@ async def user_register(request: Request):
         save_users(users)
     reg_note(ip)
     tok, exp = new_user_session(display, key, name)
-    return {"ok": True, "token": tok, "user": display, "login": name,
-            "expiresAt": exp, "sessionHours": USER_SESSION_HOURS}
+    return {"ok": True, "token": tok, "expiresAt": exp,
+            "sessionHours": USER_SESSION_HOURS,
+            **public_user_fields(users[key], key)}
 
 
 @app.post("/api/users/login")
@@ -1218,9 +1270,9 @@ async def user_login(request: Request):
         raise HTTPException(status_code=401, detail="用户名或密码不正确")
     user_clear_fails(ip)
     tok, exp = new_user_session(rec.get("nick") or rec["name"], key, rec["name"])
-    return {"ok": True, "token": tok, "user": rec.get("nick") or rec["name"],
-            "login": rec["name"],
-            "expiresAt": exp, "sessionHours": USER_SESSION_HOURS}
+    return {"ok": True, "token": tok, "expiresAt": exp,
+            "sessionHours": USER_SESSION_HOURS,
+            **public_user_fields(rec, key)}
 
 
 @app.post("/api/users/logout")
@@ -1235,9 +1287,176 @@ def user_logout(request: Request):
 def user_session_check(request: Request):
     rec = user_session(user_token_from(request))
     if rec:
-        return {"valid": True, "user": rec["user"], "login": rec.get("login", ""),
-                "isAdmin": user_is_admin(rec["key"])}
+        with _USERS_LOCK:
+            users = load_users()
+        profile = users.get(rec["key"], {})
+        return {"valid": True, "isAdmin": user_is_admin(rec["key"]),
+                **public_user_fields(profile, rec["key"])}
     return {"valid": False}
+
+
+def _migrate_user_identity(old_key: str, new_key: str, new_name: str,
+                           old_display: str, new_display: str):
+    """用户名/昵称变更后同步会话、主题归属与评论显示名，避免主页链接断裂。"""
+    with _USERS_LOCK:
+        for sess in _USER_SESSIONS.values():
+            if str(sess.get("key") or "") == old_key:
+                sess["key"] = new_key
+                sess["login"] = new_name
+                if sess.get("user") == old_display:
+                    sess["user"] = new_display
+    for mp in THEMES_DIR.glob("*/meta.json"):
+        try:
+            m = json.loads(mp.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        changed = False
+        if str(m.get("authorKey") or "").lower() == old_key:
+            m["authorKey"] = new_key
+            changed = True
+        if str(m.get("authorLogin") or "").lower() == old_key:
+            m["authorLogin"] = new_name
+            changed = True
+        if old_display and str(m.get("author") or "").strip() == str(old_display).strip():
+            m["author"] = new_display
+            changed = True
+        if changed:
+            mp.write_text(json.dumps(m, ensure_ascii=False, indent=2), encoding="utf-8")
+    for cp in THEMES_DIR.glob("*/comments.json"):
+        try:
+            items = json.loads(cp.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+        changed = False
+        for c in items:
+            if str(c.get("key") or "").lower() == old_key:
+                c["key"] = new_key
+                changed = True
+            if old_display and str(c.get("user") or "").strip() == str(old_display).strip():
+                c["user"] = new_display
+                changed = True
+        if changed:
+            cp.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+@app.post("/api/users/me/profile")
+async def update_my_profile(request: Request):
+    """修改本人资料：用户名、昵称、简介、密码（均可单独改）。"""
+    sess = user_session(user_token_from(request))
+    if not sess:
+        raise HTTPException(status_code=401, detail="请先登录")
+    try:
+        body = await request.json()
+    except Exception:
+        raise HTTPException(status_code=400, detail="请求格式错误")
+    if not isinstance(body, dict):
+        raise HTTPException(status_code=400, detail="请求格式错误")
+    old_key = sess["key"]
+    with _USERS_LOCK:
+        users = load_users()
+        rec = users.get(old_key)
+        if rec is None:
+            raise HTTPException(status_code=401, detail="账号不存在，请重新登录")
+        new_name = str(body.get("login") if body.get("login") is not None
+                       else rec.get("name") or "").strip()
+        new_nick = str(body.get("nick") if body.get("nick") is not None
+                       else rec.get("nick") or "").strip()
+        new_bio = str(body.get("bio") if body.get("bio") is not None
+                      else rec.get("bio") or "").strip()
+        if not USER_NAME_RE.match(new_name):
+            raise HTTPException(status_code=400,
+                                detail="用户名需为 2-20 位中文、字母、数字或下划线")
+        if len(new_nick) > 24:
+            raise HTTPException(status_code=400, detail="昵称不能超过 24 字")
+        if len(new_bio) > BIO_MAX:
+            raise HTTPException(status_code=400, detail=f"简介不能超过 {BIO_MAX} 字")
+        new_key = new_name.lower()
+        if new_key != old_key:
+            if new_key in users:
+                raise HTTPException(status_code=409, detail="该用户名已被注册")
+            for k, u in users.items():
+                if k != old_key and str(u.get("nick") or "").strip().lower() == new_key:
+                    raise HTTPException(status_code=409, detail="该用户名与其他用户昵称冲突")
+        new_pwd = str(body.get("newPassword") or "")
+        if new_pwd:
+            if not verify_password(str(body.get("oldPassword") or ""), rec.get("pwd", "")):
+                raise HTTPException(status_code=400, detail="原密码不正确")
+            if len(new_pwd) < 6 or len(new_pwd) > 64:
+                raise HTTPException(status_code=400, detail="新密码需为 6-64 位")
+        old_display = rec.get("nick") or rec.get("name") or ""
+        new_display = new_nick or new_name
+        rec["name"] = new_name
+        rec["nick"] = new_nick
+        rec["bio"] = new_bio
+        if new_pwd:
+            rec["pwd"] = hash_password(new_pwd)
+        if new_key != old_key:
+            users.pop(old_key, None)
+            users[new_key] = rec
+        save_users(users)
+    _migrate_user_identity(old_key, new_key, new_name, old_display, new_display)
+    return {"ok": True, "changedLogin": new_key != old_key,
+            **public_user_fields(rec, new_key)}
+
+
+@app.post("/api/users/me/avatar")
+async def upload_my_avatar(request: Request, file: UploadFile = File(...)):
+    """上传本人头像：≤2 MB 的 png/jpg/webp/gif，覆盖旧头像。"""
+    sess = user_session(user_token_from(request))
+    if not sess:
+        raise HTTPException(status_code=401, detail="请先登录")
+    ext = Path(file.filename or "").suffix.lower()
+    if ext not in AVATAR_EXTS:
+        raise HTTPException(status_code=400,
+                            detail="头像格式必须是 " + " / ".join(AVATAR_EXTS))
+    b = await file.read()
+    if not b:
+        raise HTTPException(status_code=400, detail="图片为空")
+    if len(b) > AVATAR_MAX_BYTES:
+        raise HTTPException(status_code=413, detail="头像超过 2 MB 上限")
+    head = b[:12]
+    valid = (head.startswith(b"\x89PNG") or head.startswith(b"\xff\xd8\xff")
+             or head.startswith(b"GIF8")
+             or (head[:4] == b"RIFF" and head[8:12] == b"WEBP"))
+    if not valid:
+        raise HTTPException(status_code=400, detail="图片内容不是受支持的格式")
+    fname = uuid.uuid4().hex + ext
+    (AVATARS_DIR / fname).write_bytes(b)
+    with _USERS_LOCK:
+        users = load_users()
+        rec = users.get(sess["key"])
+        if rec is None:
+            raise HTTPException(status_code=401, detail="账号不存在，请重新登录")
+        old = rec.get("avatar")
+        rec["avatar"] = fname
+        save_users(users)
+    if old and old != fname and Path(old).name == old:
+        try:
+            (AVATARS_DIR / old).unlink()
+        except Exception:
+            pass
+    return {"ok": True, **public_user_fields(rec, sess["key"])}
+
+
+@app.delete("/api/users/me/avatar")
+def delete_my_avatar(request: Request):
+    sess = user_session(user_token_from(request))
+    if not sess:
+        raise HTTPException(status_code=401, detail="请先登录")
+    with _USERS_LOCK:
+        users = load_users()
+        rec = users.get(sess["key"])
+        if rec is None:
+            raise HTTPException(status_code=401, detail="账号不存在，请重新登录")
+        old = rec.get("avatar")
+        rec.pop("avatar", None)
+        save_users(users)
+    if old and Path(old).name == old:
+        try:
+            (AVATARS_DIR / old).unlink()
+        except Exception:
+            pass
+    return {"ok": True, **public_user_fields(rec, sess["key"])}
 
 
 def find_user_record(login: str):
@@ -1254,6 +1473,24 @@ def find_user_record(login: str):
         if str(r.get("nick") or "").strip().lower() == key:
             return r, k
     return None, ""
+
+
+@app.get("/api/users/{login}/avatar")
+def serve_avatar(login: str):
+    """公开头像；未上传自定义头像时返回按用户名生成的字母 SVG。"""
+    rec, key = find_user_record(login)
+    if rec is None:
+        raise HTTPException(status_code=404, detail="用户不存在")
+    fname = str(rec.get("avatar") or "")
+    if fname and Path(fname).name == fname:
+        p = AVATARS_DIR / fname
+        if p.is_file():
+            mime = mimetypes.guess_type(fname)[0] or "image/png"
+            return FileResponse(p, media_type=mime,
+                                headers={"Cache-Control": "public, max-age=120"})
+    return Response(content=default_avatar_svg(rec.get("name") or key),
+                    media_type="image/svg+xml",
+                    headers={"Cache-Control": "public, max-age=120"})
 
 
 def author_belongs_to(rec: dict, key: str, meta: dict) -> bool:
@@ -1303,6 +1540,8 @@ def user_profile(login: str):
     return {
         "login": rec.get("name", ""),
         "nick": rec.get("nick") or rec.get("name", ""),
+        "avatar": user_avatar_url(rec.get("name") or key),
+        "bio": str(rec.get("bio") or ""),
         "created": rec.get("created", ""),
         "themeCount": len(themes),
         "commentCount": len(comments),
@@ -1412,6 +1651,7 @@ def get_comments(tid: str):
         k = str(c.get("key") or "").lower()
         return (users.get(k) or {}).get("name", "") or k
     return [{"id": c.get("id"), "user": c.get("user"), "login": _login_of(c),
+             "avatar": user_avatar_url(_login_of(c)),
              "text": c.get("text"), "time": c.get("time"), "ts": c.get("ts", 0)}
             for c in items]
 
@@ -1447,8 +1687,12 @@ async def post_comment(tid: str, request: Request):
     items = read_comments(tid)
     items.append(item)
     write_comments(tid, items)
+    comments_login = str(rec.get("login") or rec.get("key") or "")
     return JSONResponse({"ok": True, **{k: item[k] for k in
-                        ("id", "user", "text", "time", "ts")}}, status_code=201)
+                        ("id", "user", "text", "time", "ts")},
+                         "login": comments_login,
+                         "avatar": user_avatar_url(comments_login)},
+                        status_code=201)
 
 
 @app.delete("/api/themes/{tid}/comments/{cid}")

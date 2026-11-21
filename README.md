@@ -140,7 +140,11 @@ docker compose up -d          # 含命名卷 ocstore-data，重启不丢数据
 | `POST` | `/api/users/login` | 普通账号登录 |
 | `POST` | `/api/users/logout` | 注销普通账号会话 |
 | `GET` | `/api/users/session` | 校验普通账号会话，带 `X-User-Token` |
-| `GET` | `/api/users/{login}/profile` | 公开个人主页：昵称、注册时间、上传主题、评论与统计；用户名或昵称均可查，不返回凭据 |
+| `GET` | `/api/users/{login}/profile` | 公开个人主页：昵称、头像、简介、注册时间、上传主题、评论与统计；用户名或昵称均可查，不返回凭据 |
+| `POST` | `/api/users/me/profile` | 带 `X-User-Token` 修改本人资料：JSON `{login?, nick?, bio?, oldPassword?, newPassword?}`；改用户名会同步迁移主题归属与评论引用 |
+| `POST` | `/api/users/me/avatar` | 带 `X-User-Token` 上传头像（multipart `file`，png/jpg/jpeg/webp/gif，≤2 MB） |
+| `DELETE` | `/api/users/me/avatar` | 移除本人头像，恢复按用户名生成的默认字母头像 |
+| `GET` | `/api/users/{login}/avatar` | 公开头像图片；无自定义头像时返回按用户名生成的 SVG 字母头像 |
 | `GET` | `/files/{id}/{path}` | 预览图等静态文件（含目录穿越防护） |
 | `GET` | `/static/{filename}` | 页脚备案图标等 `web/` 下静态素材（文件名 + 后缀白名单） |
 
@@ -159,9 +163,11 @@ curl -X DELETE https://your-store.example/api/themes/t_xxxx \
 `POST /api/themes` 表单字段：`name*`、`author`、`description`、`version`、`category`（`theme` / `icons` / `background` / `fonts` / `efi` 或中文名称，默认 `theme`）、`tags`（逗号分隔）、`package*`（.zip）、`previews`（多张图片，可重复）。
 
 返回的主题对象字段：
-`id, name, author, authorLogin, description, version, tags[], category, categoryLabel, thumbnail, previews[], cover, download, previewCount, commentCount, sizeText, updated, downloads`。
-其中 `thumbnail` / `download` 是以 `/` 开头的相对路径，由客户端拼接服务器地址；`category` 存 slug，`categoryLabel` 是中文显示名。
-登录后从网页上传主题会自动写入 `authorLogin` 归属个人主页；老主题按作者显示名与用户名/昵称匹配，匹配不到则不进入任何主页。
+`id, name, author, authorLogin, authorAvatar, description, version, tags[], category, categoryLabel, thumbnail, previews[], cover, download, previewCount, commentCount, sizeText, updated, downloads`。
+其中 `thumbnail` / `download` / `authorAvatar` 是以 `/` 开头的相对路径，由客户端拼接服务器地址；`category` 存 slug，`categoryLabel` 是中文显示名。
+登录上传（网页或 App 带 `X-User-Token`）会写入 `authorKey/authorLogin` 归属个人主页；改用户名时这些字段及评论 `key` 会一起迁移。老主题按作者显示名与用户名/昵称匹配，匹配不到则不进入任何主页，`authorAvatar` 为空（客户端显示首字母占位）。
+
+评论列表接口额外返回 `login` / `avatar`，供前端从评论用户头像与昵称跳转其主页；`GET /api/users/{login}/profile` 返回 `avatar` / `bio` 以及该用户的 `themes` / `comments`。
 
 示例：
 ```bash

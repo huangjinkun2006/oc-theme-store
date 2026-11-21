@@ -41,6 +41,17 @@
   .user-btn:hover{background:var(--accent-dark)}
   .user-btn.on{background:var(--surface);color:var(--text);border-color:var(--line2)}
   .user-btn.on:hover{border-color:var(--accent);color:var(--accent)}
+  .user-btn{display:inline-flex;align-items:center;gap:8px;padding:5px 12px 5px 6px}
+  .user-btn .nav-av{width:26px;height:26px;border-radius:8px;font-size:12px}
+  /* 头像：有图片显示图片，无图显示首字母，失败自动回退 */
+  .av{position:relative;display:inline-flex;align-items:center;justify-content:center;
+    overflow:hidden;color:#fff;font-weight:750;line-height:1;flex:0 0 auto}
+  .av img{width:100%;height:100%;object-fit:cover;display:block}
+  .author-av{width:18px;height:18px;border-radius:6px;font-size:10px;border:0;padding:0;
+    vertical-align:-4px;margin-right:5px;cursor:pointer}
+  .author-av:hover{filter:brightness(.94)}
+  .cmt-av{width:30px;height:30px;border-radius:9px;font-size:12px;border:0;padding:0;cursor:pointer}
+  .cmt-av.plain{cursor:default}
   .auth-tabs{display:flex;gap:0;border:1px solid var(--line2);border-radius:9px;overflow:hidden;margin-bottom:16px}
   .auth-tabs button{flex:1;border:0;background:var(--surface2);color:var(--muted);padding:10px;
     font-size:13px;font-weight:650;cursor:pointer}
@@ -186,7 +197,8 @@
   .author-row{display:flex;align-items:center;gap:10px;margin-bottom:14px}
   .author-avatar{width:34px;height:34px;border-radius:50%;flex:0 0 auto;display:flex;
     align-items:center;justify-content:center;background:var(--accent);color:#fff;
-    font-size:14px;font-weight:700}
+    font-size:14px;font-weight:700;border:0;padding:0;cursor:pointer}
+  .author-avatar:hover{filter:brightness(.94)}
   .author-name{font-size:12.5px;font-weight:700;color:var(--text)}
   .detail-byline{font-size:11px;color:var(--muted);margin-top:2px}
   .detail-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:6px;margin-bottom:16px;
@@ -232,6 +244,7 @@
   .cmt-list{display:flex;flex-direction:column;gap:10px;max-height:220px;overflow-y:auto;padding-right:2px}
   .cmt{border:1px solid var(--line);border-radius:9px;padding:9px 12px;background:var(--surface2)}
   .cmt .hd{display:flex;align-items:center;gap:8px;margin-bottom:4px}
+  .cmt .hd .av{margin-right:1px}
   .cmt .who{font-size:12px;font-weight:700;color:var(--accent)}
   .cmt .tm{font-size:11px;color:var(--muted)}
   .cmt .rm{margin-left:auto;border:0;background:none;color:var(--muted);font-size:11px;cursor:pointer;padding:2px 4px}
@@ -290,6 +303,21 @@
   .profile-avatar{width:64px;height:64px;border-radius:18px;flex:0 0 auto;display:flex;
     align-items:center;justify-content:center;color:#fff;font-size:24px;font-weight:800}
   .profile-id{min-width:0}
+  .profile-actions{margin-left:auto;display:flex;gap:8px;align-items:flex-start;flex-wrap:wrap}
+  .profile-actions button{background:var(--surface);border:1px solid var(--line2);border-radius:8px;
+    padding:7px 12px;font-size:12px;font-weight:650;color:var(--muted);cursor:pointer}
+  .profile-actions button:hover{border-color:var(--accent);color:var(--accent)}
+  .profile-bio{margin:10px 0 0;font-size:12.5px;line-height:1.7;color:#4d5a6b;white-space:pre-wrap}
+  .avatar-pick{display:flex;align-items:center;gap:14px;margin-bottom:16px}
+  .avatar-pick .av{width:64px;height:64px;border-radius:18px;font-size:24px}
+  .avatar-pick .pick-ops{display:flex;flex-direction:column;gap:6px;min-width:0}
+  .avatar-pick input[type=file]{max-width:250px;font-size:11.5px;color:var(--muted)}
+  .avatar-pick button{background:var(--surface2);border:1px solid var(--line2);border-radius:7px;
+    padding:5px 10px;font-size:11.5px;color:var(--muted);cursor:pointer}
+  .avatar-pick button:hover{border-color:var(--accent);color:var(--accent)}
+  .edit-pwd{border:1px dashed var(--line2);border-radius:9px;padding:10px 12px;margin-top:12px}
+  .edit-pwd summary{font-size:12px;color:var(--muted);cursor:pointer}
+  .edit-pwd input{margin-top:8px}
   .profile-id h2{font-size:20px;margin:0 0 4px;font-weight:750}
   .profile-sub{font-size:12px;color:var(--muted);display:flex;gap:12px;flex-wrap:wrap}
   .profile-mine{margin-left:auto;align-self:flex-start;background:var(--accent-soft);color:var(--accent);
@@ -358,15 +386,19 @@
       <button type="button" onclick="closeProfile()">← 返回主题商店</button>
     </div>
     <div class="profile-hero panel">
-      <div class="profile-avatar" id="profileAvatar">O</div>
+      <div class="profile-avatar av" id="profileAvatar" data-letter="O">O</div>
       <div class="profile-id">
         <h2 id="profileName">个人主页</h2>
         <div class="profile-sub">
           <span id="profileLogin"></span>
           <span id="profileSince"></span>
         </div>
+        <div class="profile-bio" id="profileBio" style="display:none"></div>
       </div>
-      <span class="profile-mine" id="profileMine" style="display:none">我的主页</span>
+      <div class="profile-actions">
+        <span class="profile-mine" id="profileMine" style="display:none">我的主页</span>
+        <button type="button" id="profileEditBtn" style="display:none" onclick="openProfileEdit()">编辑资料</button>
+      </div>
     </div>
     <div class="profile-stats">
       <div><div class="v" id="profileThemesCount">0</div><div class="k">上传主题</div></div>
@@ -531,7 +563,7 @@
       <span class="cat-badge" id="detailCat">完整主题</span>
       <h2 id="detailName"></h2>
       <div class="author-row">
-        <span class="author-avatar" id="detailAvatar">O</span>
+        <button type="button" class="author-avatar av" id="detailAvatar" onclick="openAuthorProfile()" title="查看主页">O</button>
         <div>
           <button type="button" class="author-name link" id="detailAuthor" onclick="openAuthorProfile()"></button>
           <div class="detail-byline" id="detailByline"></div>
@@ -603,9 +635,45 @@
       <p class="hint" style="margin-bottom:14px">当前登录：<b id="authWho"></b></p>
       <div class="actions">
         <button type="button" class="btn-ghost" onclick="closeAuth()">关闭</button>
+        <button type="button" class="btn-primary" onclick="closeAuth();openProfileEdit()">编辑资料</button>
         <button type="button" class="btn-logout" onclick="userLogout()">退出登录</button>
       </div>
     </div>
+  </div>
+</div>
+
+<div class="modal-mask" id="profileEditMask" onclick="if(event.target===this)closeProfileEdit()">
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="profileEditTitle">
+    <h3 id="profileEditTitle">编辑个人资料</h3>
+    <p class="hint">头像、昵称和个人简介会展示在你的主页、主题作者行与评论区。用户名也是登录账号，修改后请用新用户名登录。</p>
+    <div class="avatar-pick">
+      <span class="av" id="editAvatarPreview" data-letter="O">O</span>
+      <div class="pick-ops">
+        <input type="file" id="editAvatarFile" accept="image/png,image/jpeg,image/webp,image/gif">
+        <div>
+          <button type="button" onclick="uploadEditAvatar()">上传头像</button>
+          <button type="button" onclick="removeEditAvatar()">移除头像</button>
+        </div>
+      </div>
+    </div>
+    <form id="profileEditForm">
+      <label>用户名（登录账号）</label>
+      <input type="text" id="editLogin" required autocomplete="username">
+      <label style="margin-top:11px">昵称（展示名）</label>
+      <input type="text" id="editNick" maxlength="24" placeholder="留空则使用用户名">
+      <label style="margin-top:11px">个人简介</label>
+      <textarea id="editBio" maxlength="160" rows="3" placeholder="介绍一下自己…"></textarea>
+      <details class="edit-pwd">
+        <summary>修改密码（可选）</summary>
+        <input type="password" id="editOldPwd" placeholder="原密码" autocomplete="current-password">
+        <input type="password" id="editNewPwd" placeholder="新密码（6-64 位）" autocomplete="new-password">
+      </details>
+      <div class="actions">
+        <button type="button" class="btn-ghost" onclick="closeProfileEdit()">取消</button>
+        <button type="submit" class="btn-primary" id="editSaveBtn">保存资料</button>
+      </div>
+      <div class="msg" id="editMsg"></div>
+    </form>
   </div>
 </div>
 
@@ -624,6 +692,36 @@ function copyBase(btn){
   });
 }
 function esc(s){return String(s||'').replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));}
+function avatarColor(name){
+  const colors=['#2563eb','#0f766e','#7c3aed','#b45309','#be123c','#1d4ed8'];
+  const s=String(name||'O');
+  let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0;
+  return colors[h%colors.length];
+}
+function avatarInner(url,name){
+  if(!url) return esc(String(name||'?').slice(0,1).toUpperCase());
+  return `<img src="${esc(url)}" alt="" loading="lazy" `
+       + `onerror="this.remove();this.parentNode.textContent=this.parentNode.dataset.letter||'?'">`;
+}
+function avTag(url,name,cls){
+  const letter=String(name||'?').slice(0,1).toUpperCase();
+  return `<span class="av ${cls||''}" data-letter="${esc(letter)}" `
+       + `style="background:${avatarColor(name)}">${avatarInner(url,name)}</span>`;
+}
+function setAv(el,url,name){
+  if(!el) return;
+  const letter=String(name||'?').slice(0,1).toUpperCase();
+  el.dataset.letter=letter;
+  el.style.background=avatarColor(name);
+  el.textContent=letter;
+  if(url){
+    el.textContent='';
+    const img=document.createElement('img');
+    img.src=url; img.alt='';
+    img.onerror=function(){ img.remove(); el.textContent=letter; };
+    el.appendChild(img);
+  }
+}
 function thumb(t){
   return t.thumbnail ? `<img src="${esc(t.thumbnail)}" alt="" loading="lazy"
       onerror="this.parentNode.textContent='无预览图'">` : '无预览图';
@@ -665,12 +763,17 @@ function card(t){
   const authorHtml = authorKey
     ? `<a class="author-link" href="javascript:void(0)" data-login="${esc(authorKey)}" onclick="event.stopPropagation();openProfileByAuthor(this.dataset.login)">${esc(authorRaw)}</a>`
     : esc(authorRaw);
+  const authorAv = authorKey
+    ? `<button type="button" class="av author-av" data-login="${esc(authorKey)}" data-letter="${esc(authorRaw.slice(0,1).toUpperCase())}" `
+      + `style="background:${avatarColor(authorRaw)}" title="查看主页" `
+      + `onclick="event.stopPropagation();openProfileByAuthor(this.dataset.login)">${avatarInner(t.authorAvatar,authorRaw)}</button>`
+    : '';
   return `<div class="card" data-id="${esc(t.id)}" onclick="openDetailById(this.dataset.id)" title="查看详情" style="cursor:pointer">
     <div class="thumb">${thumb(t)}</div>
     <div class="body">
       <div class="name">${esc(t.name)}</div>
       <div class="meta"><span class="cat-badge">${esc(t.categoryLabel||'完整主题')}</span>
-        <span>${authorHtml}</span><span>v${esc(t.version||'1.0')}</span>
+        <span>${authorAv}${authorHtml}</span><span>v${esc(t.version||'1.0')}</span>
         <span>${esc(t.sizeText||'')}</span></div>
       <div class="desc">${esc(t.description||'暂无简介')}</div>
       <div class="tags">${tags}</div>
@@ -1063,12 +1166,7 @@ function showDetail(t){
   document.getElementById('detailName').textContent=t.name||'未命名';
   const author=t.author||'匿名';
   document.getElementById('detailAuthor').textContent=author;
-  const av=document.getElementById('detailAvatar');
-  av.textContent=author.slice(0,1).toUpperCase();
-  // 头像底色按作者名稳定取色，保持单一蓝色强调风格内的层次
-  const avColors=['#2563eb','#0f766e','#7c3aed','#b45309','#be123c','#1d4ed8'];
-  let h=0; for(let i=0;i<author.length;i++){h=(h*31+author.charCodeAt(i))>>>0;}
-  av.style.background=avColors[h%avColors.length];
+  setAv(document.getElementById('detailAvatar'), t.authorAvatar, author);
   document.getElementById('detailByline').textContent='更新于 '+(t.updated||'未知');
   document.getElementById('detailDownloads').textContent=t.downloads||0;
   document.getElementById('detailCommentCount').textContent=t.commentCount||0;
@@ -1181,10 +1279,24 @@ document.addEventListener('keydown',function(e){
 let userToken = localStorage.getItem('oc_user_token') || '';
 let userName = localStorage.getItem('oc_user_name') || '';
 let userLogin = localStorage.getItem('oc_user_login') || '';
+let userAvatar = localStorage.getItem('oc_user_avatar') || '';
+let userBio = localStorage.getItem('oc_user_bio') || '';
 let userIsAdmin = false;   // 被授予管理员权限的普通用户
 let authMode = 'login';
 
 function effectiveAdmin(){ return isAdmin || userIsAdmin; }
+function applyUserFields(d){
+  if(!d || d.valid===false) return;
+  userName=d.user||d.nick||d.login||'';
+  userLogin=d.login||'';
+  userAvatar=d.avatar||'';
+  userBio=d.bio||'';
+  localStorage.setItem('oc_user_name',userName);
+  localStorage.setItem('oc_user_login',userLogin);
+  localStorage.setItem('oc_user_avatar',userAvatar);
+  localStorage.setItem('oc_user_bio',userBio);
+  setUserUI();
+}
 function onUserButton(){
   if(userName) openProfile(userLogin || userName);
   else openAuth();
@@ -1193,7 +1305,8 @@ function setUserUI(){
   const btn=document.getElementById('userBtn');
   if(userName){
     btn.classList.add('on');
-    btn.innerHTML='<span class="dot" style="background:var(--green)"></span>'+esc(userName)+(userIsAdmin?'（管理员）':'');
+    btn.innerHTML=avTag(userAvatar,userName,'nav-av')
+      +'<span>'+esc(userName)+(userIsAdmin?'（管理员）':'')+'</span>';
   }else{
     btn.classList.remove('on');
     btn.textContent='登录 / 注册';
@@ -1223,27 +1336,28 @@ function openAuth(){
 }
 function closeAuth(){ document.getElementById('authMask').classList.remove('show'); }
 async function checkUserSession(){
-  if(!userToken){ userName=''; userIsAdmin=false; setUserUI(); return; }
+  if(!userToken){ clearUserSession(); return; }
   try{
     const r=await fetch('/api/users/session',{headers:{'X-User-Token':userToken}});
     const d=await r.json().catch(()=>({}));
     if(d.valid){
-      userName=d.user; userLogin=d.login||''; userIsAdmin=!!d.isAdmin;
-      localStorage.setItem('oc_user_name',userName);
-      localStorage.setItem('oc_user_login',userLogin);
-      setUserUI();
+      applyUserFields(d);
+      userIsAdmin=!!d.isAdmin; setUserUI();
       load();   // 刷新卡片删除按钮（被授予管理员的用户可见）
     }
-    else{ localStorage.removeItem('oc_user_token'); localStorage.removeItem('oc_user_name');
-          localStorage.removeItem('oc_user_login');
-          userToken=''; userName=''; userLogin=''; userIsAdmin=false; setUserUI(); }
+    else clearUserSession();
   }catch(e){ setUserUI(); }
+}
+function clearUserSession(){
+  localStorage.removeItem('oc_user_token'); localStorage.removeItem('oc_user_name');
+  localStorage.removeItem('oc_user_login'); localStorage.removeItem('oc_user_avatar');
+  localStorage.removeItem('oc_user_bio');
+  userToken=''; userName=''; userLogin=''; userAvatar=''; userBio=''; userIsAdmin=false;
+  setUserUI();
 }
 async function userLogout(){
   try{ await fetch('/api/users/logout',{method:'POST',headers:{'X-User-Token':userToken}}); }catch(e){}
-  localStorage.removeItem('oc_user_token'); localStorage.removeItem('oc_user_name');
-  localStorage.removeItem('oc_user_login');
-  userToken=''; userName=''; userLogin=''; userIsAdmin=false; setUserUI(); closeAuth();
+  clearUserSession(); closeAuth();
   if(document.getElementById('detailMask').classList.contains('show')&&detailCurrentId) loadComments(detailCurrentId);
   showToast('已退出登录','ok');
 }
@@ -1264,10 +1378,7 @@ document.getElementById('authForm').addEventListener('submit', async e=>{
         nickname:(document.getElementById('authNick').value||'').trim()})});
     const d=await r.json().catch(()=>({}));
     if(!r.ok) throw new Error(d.detail||('HTTP '+r.status));
-    userToken=d.token; userName=d.user; userLogin=d.login||'';
-    localStorage.setItem('oc_user_token',userToken);
-    localStorage.setItem('oc_user_name',userName);
-    localStorage.setItem('oc_user_login',userLogin);
+    userToken=d.token; applyUserFields(d);
     document.getElementById('authPass').value='';
     document.getElementById('authPass2').value='';
     setUserUI(); closeAuth();
@@ -1282,12 +1393,6 @@ document.getElementById('authForm').addEventListener('submit', async e=>{
 let profileData = null;
 let profileTab = 'themes';
 
-function avatarColor(name){
-  const colors=['#2563eb','#0f766e','#7c3aed','#b45309','#be123c','#1d4ed8'];
-  const s=String(name||'O');
-  let h=0; for(let i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))>>>0;
-  return colors[h%colors.length];
-}
 function showProfileView(){
   document.getElementById('mainCols').style.display='none';
   document.getElementById('profileView').style.display='';
@@ -1354,16 +1459,18 @@ function renderProfile(){
   document.getElementById('profileLogin').textContent='@'+String(d.login||'');
   document.getElementById('profileSince').textContent=d.created
     ? '注册于 '+String(d.created).slice(0,10) : '';
-  const av=document.getElementById('profileAvatar');
-  av.textContent=nick.slice(0,1).toUpperCase();
-  av.style.background=avatarColor(nick);
+  setAv(document.getElementById('profileAvatar'), d.avatar, nick);
+  const bio=document.getElementById('profileBio');
+  bio.textContent=d.bio||'';
+  bio.style.display=d.bio?'':'none';
   document.getElementById('profileThemesCount').textContent=d.themeCount||0;
   document.getElementById('profileCommentsCount').textContent=d.commentCount||0;
   document.getElementById('profileDownloadsCount').textContent=d.downloadCount||0;
   document.getElementById('ptThemes').textContent=d.themeCount||0;
   document.getElementById('ptComments').textContent=d.commentCount||0;
-  document.getElementById('profileMine').style.display=
-    (userLogin && String(userLogin).toLowerCase()===String(d.login||'').toLowerCase())?'':'none';
+  const mine=!!(userLogin && String(userLogin).toLowerCase()===String(d.login||'').toLowerCase());
+  document.getElementById('profileMine').style.display=mine?'':'none';
+  document.getElementById('profileEditBtn').style.display=mine?'':'none';
   document.getElementById('profileThemeGrid').innerHTML=
     (d.themes||[]).map(card).join('');
   document.getElementById('profileThemeEmpty').style.display=
@@ -1397,6 +1504,84 @@ function setProfileTab(tab){
   document.getElementById('profileComments').style.display=profileTab==='comments'?'':'none';
 }
 
+// ---- 编辑个人资料 ----
+function openProfileEdit(){
+  if(!userToken){ openAuth(); return; }
+  document.getElementById('editMsg').className='msg';
+  document.getElementById('editMsg').textContent='';
+  document.getElementById('editLogin').value=userLogin||'';
+  document.getElementById('editNick').value=userName||'';
+  document.getElementById('editBio').value=userBio||'';
+  document.getElementById('editOldPwd').value='';
+  document.getElementById('editNewPwd').value='';
+  setAv(document.getElementById('editAvatarPreview'), userAvatar, userName||'O');
+  document.getElementById('profileEditMask').classList.add('show');
+}
+function closeProfileEdit(){ document.getElementById('profileEditMask').classList.remove('show'); }
+async function refreshAfterProfile(d){
+  applyUserFields(d);
+  await load();
+  if(document.getElementById('detailMask').classList.contains('show')&&detailCurrentId) loadComments(detailCurrentId);
+  if(location.hash.indexOf('#/u/')===0){
+    history.replaceState(null,'',location.pathname+location.search+'#/u/'+encodeURIComponent(d.login));
+    await loadProfile(d.login);
+  }
+}
+async function uploadEditAvatar(){
+  const inp=document.getElementById('editAvatarFile'), f=inp.files&&inp.files[0];
+  if(!f){ showToast('请先选择头像图片','err'); return; }
+  const msg=document.getElementById('editMsg');
+  msg.className='msg'; msg.textContent='上传中…';
+  try{
+    const fd=new FormData(); fd.append('file',f);
+    const r=await fetch('/api/users/me/avatar',{method:'POST',
+      headers:{'X-User-Token':userToken},body:fd});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.detail||('HTTP '+r.status));
+    inp.value='';
+    await refreshAfterProfile(d);
+    setAv(document.getElementById('editAvatarPreview'), userAvatar, userName||'O');
+    msg.className='msg ok'; msg.textContent='头像已更新';
+    showToast('头像已更新','ok');
+  }catch(e){ msg.className='msg err'; msg.textContent=e.message; }
+}
+async function removeEditAvatar(){
+  const msg=document.getElementById('editMsg');
+  msg.className='msg'; msg.textContent='处理中…';
+  try{
+    const r=await fetch('/api/users/me/avatar',{method:'DELETE',headers:{'X-User-Token':userToken}});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.detail||('HTTP '+r.status));
+    await refreshAfterProfile(d);
+    setAv(document.getElementById('editAvatarPreview'), '', userName||'O');
+    msg.className='msg ok'; msg.textContent='已恢复默认头像';
+  }catch(e){ msg.className='msg err'; msg.textContent=e.message; }
+}
+document.getElementById('profileEditForm').addEventListener('submit', async e=>{
+  e.preventDefault();
+  const msg=document.getElementById('editMsg'), btn=document.getElementById('editSaveBtn');
+  const body={
+    login:document.getElementById('editLogin').value.trim(),
+    nick:document.getElementById('editNick').value.trim(),
+    bio:document.getElementById('editBio').value.trim()
+  };
+  const oldPwd=document.getElementById('editOldPwd').value;
+  const newPwd=document.getElementById('editNewPwd').value;
+  if(newPwd){ body.oldPassword=oldPwd; body.newPassword=newPwd; }
+  msg.className='msg'; msg.textContent='保存中…'; btn.disabled=true;
+  try{
+    const r=await fetch('/api/users/me/profile',{method:'POST',
+      headers:{'Content-Type':'application/json','X-User-Token':userToken},
+      body:JSON.stringify(body)});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.detail||('HTTP '+r.status));
+    await refreshAfterProfile(d);
+    closeProfileEdit();
+    showToast('资料已保存','ok');
+  }catch(err){ msg.className='msg err'; msg.textContent=err.message; }
+  finally{ btn.disabled=false; }
+});
+
 // ---- 评论区 ----
 let detailCurrentId = '';
 async function loadComments(tid){
@@ -1419,7 +1604,12 @@ async function loadComments(tid){
         const who=c.login
           ? `<a class="who author-link" href="javascript:void(0)" data-login="${esc(c.login)}" onclick="openProfileByAuthor(this.dataset.login)">${esc(c.user)}</a>`
           : `<span class="who">${esc(c.user)}</span>`;
-        return `<div class="cmt"><div class="hd">${who}
+        const av=c.login
+          ? `<button type="button" class="av cmt-av" data-login="${esc(c.login)}" data-letter="${esc(String(c.user||'?').slice(0,1).toUpperCase())}" `
+            + `style="background:${avatarColor(c.user||c.login)}" title="查看主页" `
+            + `onclick="openProfileByAuthor(this.dataset.login)">${avatarInner(c.avatar,c.user||c.login)}</button>`
+          : `<span class="av cmt-av plain" style="background:${avatarColor(c.user||'?')}">${esc(String(c.user||'?').slice(0,1).toUpperCase())}</span>`;
+        return `<div class="cmt"><div class="hd">${av}${who}
           <span class="tm">${esc(c.time||'')}</span>${rm}</div>
           <div class="tx">${esc(c.text)}</div></div>`;
       }).join('');
