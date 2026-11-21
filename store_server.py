@@ -46,7 +46,9 @@ OC Theme Studio · 主题商店后端（可自托管 / 可部署到任意 Python
     GET  /api/categories         主题分类列表与数量
     GET  /api/themes             主题列表（可用 ?category= 过滤）
     GET  /api/themes/{id}        主题详情
-    GET  /api/themes/{id}/download  下载主题包 zip
+    GET  /api/themes/{id}/download  下载主题包 zip（默认最新版；?version=1.0 下载历史版本）
+    GET  /api/themes/{id}/versions  版本历史（最新在前）
+    POST /api/themes/{id}/versions  上传新版本（作者本人或管理员，multipart version/notes/package）
     POST /api/themes             上传主题（multipart，含 category）
     DELETE /api/themes/{id}      删除主题（需管理员登录会话或静态口令）
     POST /api/themes/{id}/cover           自定义封面（管理员上传图片）
@@ -246,7 +248,60 @@ def list_meta() -> list:
     return out
 
 
-def to_public(meta: dict) -> dict:
+def versions_path(tid: str) -> Path:
+    return theme_dir(tid) / "versions.json"
+
+
+def read_versions(tid: str) -> list:
+    """版本历史（最新在前）。老主题没有 versions.json 时把当前包当作唯一版本。"""
+    m = read_meta(tid)
+    if m is None:
+        return []
+    p = versions_path(tid)
+    if p.exists():
+        try:
+            data = json.loads(p.read_text(encoding="utf-8"))
+            if isinstance(data, list) and data:
+                return data
+        except Exception:
+            pass
+    pkg = theme_dir(tid) / "package.zip"
+    if not pkg.exists():
+        return []
+    size = pkg.stat().st_size
+    return [{
+        "version": str(m.get("version") or "1.0"),
+        "file": "package.zip",
+        "size": size,
+        "sizeText": size_text(size),
+        "uploaded": str(m.get("updated") or ""),
+        "notes": "初始版本",
+        "initial": True,
+    }]
+
+
+def save_versions(tid: str, items: list):
+    tmp = theme_dir(tid) / ("versions_" + uuid.uuid4().hex[:8] + ".tmp")
+    tmp.write_text(json.dumps(items, ensure_ascii=False, indent=2), encoding="utf-8")
+    tmp.replace(versions_path(tid))
+
+
+def version_file(tid: str, version: str) -> Optional[Path]:
+    for v in read_versions(tid):
+        if str(v.get("version") or "").lower() != str(version or "").strip().lower():
+            continue
+        fname = str(v.get("file") or "")
+        if fname == "package.zip":
+            p = theme_dir(tid) / "package.zip"
+        elif Path(fname).name == fname:
+            p = theme_dir(tid) / "versions" / fname
+        else:
+            return None
+        return p if p.is_file() else None
+    return None
+
+
+def to_public(meta: dict, include_versions: bool = False) -> dict:
     """内部元数据 -> 客户端 StoreTheme 需要的字段。"""
     cat = normalize_category(meta.get("category"))
     tid = meta.get("id", "")
@@ -270,7 +325,7 @@ def to_public(meta: dict) -> dict:
         cover = f"/files/{tid}/previews/{meta['cover']}"
         if cover in previews:
             thumbnail = cover
-    return {
+    result = {
         "id": tid,
         "name": meta.get("name", ""),
         "author": meta.get("author", ""),
@@ -292,6 +347,17 @@ def to_public(meta: dict) -> dict:
         "downloads": meta.get("downloads", 0),
         "commentCount": len(read_comments(tid)),
     }
+    if include_versions:
+        vs = read_versions(tid)
+        result["versions"] = [{
+            "version": str(v.get("version") or ""),
+            "sizeText": str(v.get("sizeText") or ""),
+            "uploaded": str(v.get("uploaded") or ""),
+            "notes": str(v.get("notes") or ""),
+        } for v in vs]
+        result["versionCount"] = len(vs)
+        result["latestVersion"] = str(vs[0].get("version") or "") if vs else ""
+    return result
 
 
 def size_text(n: int) -> str:
@@ -901,22 +967,110 @@ def get_theme(tid: str):
     m = read_meta(tid) if ID_RE.match(tid) else None
     if m is None:
         raise HTTPException(status_code=404, detail="主题不存在")
-    return to_public(m)
+    return to_public(m, include_versions=True)
+
+
+@app.get("/api/themes/{tid}/versions")
+def get_versions(tid: str):
+    if not ID_RE.match(tid) or not theme_dir(tid).exists():
+        raise HTTPException(status_code=404, detail="主题不存在")
+    vs = read_versions(tid)
+    return {"versions": vs, "latest": str(vs[0].get("version") or "") if vs else "",
+            "count": len(vs)}
 
 
 @app.get("/api/themes/{tid}/download")
-def download_theme(tid: str):
+def download_theme(tid: str, version: str = ""):
     m = read_meta(tid) if ID_RE.match(tid) else None
     if m is None:
         raise HTTPException(status_code=404, detail="主题不存在")
-    pkg = theme_dir(tid) / "package.zip"
-    if not pkg.exists():
+    target = theme_dir(tid) / "package.zip"
+    if version.strip():
+        target = version_file(tid, version)
+        if target is None:
+            raise HTTPException(status_code=404, detail="该版本不存在")
+    if not target.exists():
         raise HTTPException(status_code=404, detail="主题包文件缺失")
     m["downloads"] = m.get("downloads", 0) + 1
     meta_path(tid).write_text(json.dumps(m, ensure_ascii=False, indent=2),
                               encoding="utf-8")
-    return FileResponse(pkg, media_type="application/zip",
-                        filename=safe_filename(m.get("name", "theme")) + ".zip")
+    base = safe_filename(m.get("name", "theme"))
+    label = safe_filename(version.strip() or m.get("version") or "latest")
+    return FileResponse(target, media_type="application/zip",
+                        filename=f"{base}_v{label}.zip")
+
+
+@app.post("/api/themes/{tid}/versions")
+async def upload_version(
+    tid: str, request: Request,
+    version: str = Form(...),
+    notes: str = Form(""),
+    package: UploadFile = File(...),
+):
+    """上传主题新版本：仅主题作者本人或管理员可操作。"""
+    if not ID_RE.match(tid) or not theme_dir(tid).exists():
+        raise HTTPException(status_code=404, detail="主题不存在")
+    m = read_meta(tid)
+    urec = user_session(user_token_from(request))
+    is_admin = admin_authorized(request)
+    author_ok = False
+    if urec:
+        with _USERS_LOCK:
+            users = load_users()
+        rec = users.get(urec["key"])
+        if rec and author_belongs_to(rec, urec["key"], m):
+            author_ok = True
+    if not author_ok and not is_admin:
+        raise HTTPException(status_code=401 if not urec else 403,
+                            detail="只有主题作者或管理员可以上传新版本")
+    ver = str(version or "").strip()[:24]
+    if not ver:
+        raise HTTPException(status_code=400, detail="请填写版本号")
+    versions = read_versions(tid)
+    if any(str(v.get("version") or "").lower() == ver.lower() for v in versions):
+        raise HTTPException(status_code=409, detail="该版本号已存在")
+    if not package.filename or not package.filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="新版本包必须是 .zip 文件")
+    raw = await package.read()
+    if not raw:
+        raise HTTPException(status_code=400, detail="版本包为空")
+    if len(raw) > MAX_BYTES:
+        raise HTTPException(status_code=413, detail=f"版本包超过 {MAX_MB} MB 上限")
+    if not zipfile.is_zipfile(__import__("io").BytesIO(raw)):
+        raise HTTPException(status_code=400, detail="不是有效的 zip 文件")
+
+    vdir = theme_dir(tid) / "versions"
+    vdir.mkdir(parents=True, exist_ok=True)
+    # 老主题的兜底版本指向 package.zip；上传新版前先把旧包归档，避免被覆盖串版
+    for v in versions:
+        if str(v.get("file") or "") == "package.zip":
+            old = "v" + safe_filename(str(v.get("version") or "1.0")).replace("_", "-")[:24] \
+                  + "_legacy.zip"
+            op = vdir / old
+            if not op.exists():
+                shutil.copyfile(theme_dir(tid) / "package.zip", op)
+            v["file"] = old
+            v.pop("initial", None)
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    fname = "v" + safe_filename(ver).replace("_", "-")[:24] \
+            + "_" + stamp + "_" + uuid.uuid4().hex[:4] + ".zip"
+    (vdir / fname).write_bytes(raw)
+    rec = {
+        "version": ver, "file": fname, "size": len(raw),
+        "sizeText": size_text(len(raw)), "uploaded": now_iso(),
+        "notes": str(notes or "").strip()[:200],
+        "uploader": str((urec or {}).get("login") or (ADMIN_USER if is_admin else "")),
+    }
+    save_versions(tid, [rec] + versions)
+
+    # package.zip 始终代表最新版，旧下载链接无需改动即可拿到最新版本
+    tmppkg = theme_dir(tid) / ("package_" + uuid.uuid4().hex[:8] + ".tmp")
+    tmppkg.write_bytes(raw)
+    tmppkg.replace(theme_dir(tid) / "package.zip")
+    m["version"] = ver
+    m["sizeText"] = size_text(len(raw))
+    _save_meta(tid, m)
+    return JSONResponse(to_public(m, include_versions=True), status_code=201)
 
 
 @app.post("/api/themes")

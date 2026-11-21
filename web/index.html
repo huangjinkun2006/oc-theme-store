@@ -216,6 +216,25 @@
   .desc-more{border:0;background:none;color:var(--accent);font-size:11.5px;font-weight:650;
     cursor:pointer;padding:4px 0 0}
   .detail-tags{display:flex;gap:6px;flex-wrap:wrap}
+  /* 版本历史：默认下载最新，历史版本逐条下载 */
+  .version-list{display:flex;flex-direction:column;gap:6px}
+  .version-row{display:flex;align-items:center;gap:8px;border:1px solid var(--line);
+    border-radius:8px;padding:7px 9px;background:var(--surface2);flex-wrap:wrap}
+  .version-badge{font:700 10.5px var(--mono);background:var(--accent-soft);color:var(--accent);
+    border-radius:5px;padding:2px 7px;flex:0 0 auto}
+  .version-note{font-size:11.5px;color:var(--text);min-width:0;flex:1;
+    overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .version-time{font-size:10.5px;color:var(--muted);font-family:var(--mono)}
+  .version-dl{font-size:11px;font-weight:650;color:var(--accent);text-decoration:none;
+    border:1px solid var(--line2);border-radius:6px;padding:3px 8px;background:var(--surface)}
+  .version-dl:hover{border-color:var(--accent)}
+  .version-upload{display:flex;gap:6px;flex-wrap:wrap;margin-top:8px}
+  .version-upload input[type=text],.version-upload input[type=file]{font-size:11px;
+    border:1px solid var(--line2);border-radius:7px;padding:5px 7px;background:var(--surface);
+    color:var(--text);max-width:100%}
+  .version-upload input[type=text]{width:92px}
+  .version-upload button{border:1px solid var(--accent);background:var(--accent);color:#fff;
+    border-radius:7px;padding:5px 10px;font-size:11px;font-weight:650;cursor:pointer}
   /* 同分类相关推荐：横滑小卡片 */
   .related{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px}
   .rel-card{flex:0 0 92px;cursor:pointer;border:1px solid var(--line);border-radius:9px;
@@ -592,6 +611,16 @@
       <div class="detail-sec">
         <h5>标签</h5>
         <div class="detail-tags" id="detailTags"></div>
+      </div>
+      <div class="detail-sec" id="versionSec">
+        <h5>版本历史 <span id="versionCount"></span></h5>
+        <div class="version-list" id="versionList"></div>
+        <div class="version-upload" id="versionUpload" style="display:none">
+          <input type="text" id="newVersion" placeholder="版本号，如 1.1" maxlength="24">
+          <input type="text" id="newVersionNotes" placeholder="更新说明（可选）" maxlength="200">
+          <input type="file" id="newVersionFile" accept=".zip">
+          <button type="button" id="newVersionBtn" onclick="uploadNewVersion()">上传新版本</button>
+        </div>
       </div>
       <div class="detail-sec" id="relatedSec" style="display:none">
         <h5>同分类推荐</h5>
@@ -1179,10 +1208,12 @@ function showDetail(t){
   document.getElementById('descMore').textContent='展开全文';
   const tags=t.tags||[];
   document.getElementById('detailTags').innerHTML=tags.map(function(x){return '<span class="tag">'+esc(x)+'</span>';}).join('');
+  renderVersions(t);
   renderRelated(t);
   const dl=document.getElementById('detailDownload');
   dl.href=t.download||'#';
-  dl.textContent=t.category==='efi'?'下载配置包':(!t.category||t.category==='theme')?'下载主题':'下载资源';
+  const dlLabel=t.category==='efi'?'下载配置包':(!t.category||t.category==='theme')?'下载主题':'下载资源';
+  dl.textContent=dlLabel+(t.latestVersion?(' · 最新 v'+t.latestVersion):'');
   document.getElementById('coverTools').classList.toggle('on',effectiveAdmin());
   detailRender();
   document.getElementById('detailMask').classList.add('show');
@@ -1191,6 +1222,51 @@ function showDetail(t){
 function openAuthorProfile(){
   const who = detailTheme && String(detailTheme.authorLogin || detailTheme.author || '').trim();
   if(who) openProfile(who);
+}
+function renderVersions(t){
+  const sec=document.getElementById('versionSec');
+  const list=document.getElementById('versionList');
+  const vs=t.versions||[];
+  document.getElementById('versionCount').textContent=vs.length?('（'+vs.length+'）'):'';
+  sec.style.display=vs.length?'':'none';
+  list.innerHTML=vs.map(function(v,i){
+    const note=v.notes||(i===0?'当前版本':'历史版本');
+    const when=(v.uploaded||'').slice(0,16)+(v.sizeText?(' · '+v.sizeText):'');
+    return `<div class="version-row">
+      <span class="version-badge">v${esc(v.version||'')}</span>
+      <span class="version-note" title="${esc(note)}">${esc(note)}</span>
+      <span class="version-time">${esc(when)}</span>
+      <a class="version-dl" href="/api/themes/${encodeURIComponent(t.id)}/download?version=${encodeURIComponent(v.version||'')}" download>下载</a>
+    </div>`;
+  }).join('');
+  const mine=!!(userLogin && String(userLogin).toLowerCase()===String(t.authorLogin||'').toLowerCase());
+  document.getElementById('versionUpload').style.display=(mine||effectiveAdmin())?'':'none';
+}
+async function uploadNewVersion(){
+  if(!detailTheme) return;
+  const ver=document.getElementById('newVersion').value.trim();
+  const notes=document.getElementById('newVersionNotes').value.trim();
+  const inp=document.getElementById('newVersionFile');
+  const f=inp.files&&inp.files[0];
+  if(!ver){ showToast('请填写版本号','err'); return; }
+  if(!f){ showToast('请选择新版本的 .zip 文件','err'); return; }
+  const btn=document.getElementById('newVersionBtn');
+  btn.disabled=true; btn.textContent='上传中…';
+  try{
+    const fd=new FormData();
+    fd.append('version',ver); fd.append('notes',notes); fd.append('package',f);
+    const r=await fetch('/api/themes/'+encodeURIComponent(detailTheme.id)+'/versions',{
+      method:'POST',headers:{'X-User-Token':userToken,'X-Admin-Token':adminToken},body:fd});
+    const d=await r.json().catch(()=>({}));
+    if(!r.ok) throw new Error(d.detail||('HTTP '+r.status));
+    document.getElementById('newVersion').value='';
+    document.getElementById('newVersionNotes').value='';
+    inp.value='';
+    showDetail(d);
+    load();
+    showToast('新版本 v'+ver+' 已上传','ok');
+  }catch(e){ showToast('上传失败：'+e.message,'err'); }
+  finally{ btn.disabled=false; btn.textContent='上传新版本'; }
 }
 function toggleDesc(){
   const d=document.getElementById('detailDesc'), b=document.getElementById('descMore');
@@ -1222,6 +1298,7 @@ function applyCoverResult(d,okText){
     detailImgs=(d.previews&&d.previews.length)?d.previews.slice():(d.thumbnail?[d.thumbnail]:[]);
     detailIdx=Math.max(0,Math.min(detailIdx,detailImgs.length-1));
     detailRender();
+    if(d.versions) renderVersions(d);
   }
   showToast(okText,'ok');
   load();   // 刷新卡片缩略图

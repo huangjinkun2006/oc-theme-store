@@ -129,7 +129,9 @@ docker compose up -d          # 含命名卷 ocstore-data，重启不丢数据
 | `GET` | `/api/categories` | 分类列表 `[{id, label, count}]`，顺序固定 |
 | `GET` | `/api/themes` | 主题列表（数组）；可用 `?category=theme\|icons\|background\|fonts\|efi` 或中文名称过滤，`all` / 空表示全部 |
 | `GET` | `/api/themes/{id}` | 主题详情 |
-| `GET` | `/api/themes/{id}/download` | 下载 zip（下载次数 +1） |
+| `GET` | `/api/themes/{id}/download` | 下载 zip（下载次数 +1）；默认最新版，`?version=1.0` 下载指定历史版本 |
+| `GET` | `/api/themes/{id}/versions` | 版本历史 `{versions, latest, count}`（最新在前） |
+| `POST` | `/api/themes/{id}/versions` | 上传新版本（multipart：`version`、`notes`、`package`，需主题作者会话或管理员） |
 | `POST` | `/api/themes` | 上传主题（multipart；启用 `STORE_UPLOAD_TOKEN` 时需带 `X-Upload-Token`） |
 | `DELETE` | `/api/themes/{id}` | 删除主题，需 `X-Admin-Token`（登录会话 token 或静态口令）；**未配置任何管理员凭据时返回 403** |
 | `GET` | `/api/admin/status` | `{enabled, staticToken, sessionHours}`，网页据此决定是否显示登录入口 |
@@ -164,7 +166,9 @@ curl -X DELETE https://your-store.example/api/themes/t_xxxx \
 
 返回的主题对象字段：
 `id, name, author, authorLogin, authorAvatar, description, version, tags[], category, categoryLabel, thumbnail, previews[], cover, download, previewCount, commentCount, sizeText, updated, downloads`。
+主题详情接口额外返回 `versions[]`（`version/sizeText/uploaded/notes`）、`versionCount`、`latestVersion`；列表接口不返回，避免放大响应。
 其中 `thumbnail` / `download` / `authorAvatar` 是以 `/` 开头的相对路径，由客户端拼接服务器地址；`category` 存 slug，`categoryLabel` 是中文显示名。
+版本历史存 `themes/<id>/versions.json` + `versions/*.zip`，`package.zip` 始终等于最新版本，因此旧下载链接自动拿到最新版；老主题无 `versions.json` 时把当前包当作唯一初始版本。新版本号必须唯一，非法 zip / 超 200 MB / 非作者或管理员均返回错误。
 登录上传（网页或 App 带 `X-User-Token`）会写入 `authorKey/authorLogin` 归属个人主页；改用户名时这些字段及评论 `key` 会一起迁移。老主题按作者显示名与用户名/昵称匹配，匹配不到则不进入任何主页，`authorAvatar` 为空（客户端显示首字母占位）。
 
 评论列表接口额外返回 `login` / `avatar`，供前端从评论用户头像与昵称跳转其主页；`GET /api/users/{login}/profile` 返回 `avatar` / `bio` 以及该用户的 `themes` / `comments`。
