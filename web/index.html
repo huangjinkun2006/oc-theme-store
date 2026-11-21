@@ -1373,6 +1373,9 @@ function applyUserFields(d){
   localStorage.setItem('oc_user_avatar',userAvatar);
   localStorage.setItem('oc_user_bio',userBio);
   setUserUI();
+  if(detailTheme && document.getElementById('detailMask').classList.contains('show')){
+    renderVersions(detailTheme);   // 登录态变化后刷新「上传新版本」入口
+  }
 }
 function onUserButton(){
   if(userName) openProfile(userLogin || userName);
